@@ -1,0 +1,21 @@
+{
+  "name": "DHANT — Dental Health Assessment, Notification & Triage",
+  "short_name": "DHANT",
+  "description": "AI-assisted oral health risk screening developed at JSSAHER.",
+  "id": "/",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FFFFFF",
+  "theme_color": "#0058BC",
+  "categories": ["health", "medical"],
+  "icons": [
+    { "src": "icons/icon-192.png",            "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png",            "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png",   "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/icon-1024.png",           "sizes": "1024x1024", "type": "image/png", "purpose": "any" }
+  ],
+  "permissions": ["camera"],
+  "screenshots": []
+}

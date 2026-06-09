@@ -1,0 +1,2347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+<title>DHANT — Dental Health Assessment, Notification &amp; Triage</title>
+<meta name="theme-color" content="#0058BC" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="DHANT" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="application-name" content="DHANT" />
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="icon" type="image/png" href="icons/favicon.png" />
+<link rel="apple-touch-icon" href="icons/icon-192.png" />
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    });
+  }
+</script>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/icon?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet" />
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          primary: '#0058BC', 'primary-dark': '#003C82', 'primary-light': '#D8E6FF', 'primary-soft': '#EAF1FB',
+          teal: '#00897B', 'teal-light': '#B2DFDB', 'teal-bg': '#E0F7F4',
+          surface: '#FFFFFF', 'surface-2': '#F5F8FC', 'surface-3': '#EEF2F8',
+          ink: '#0F172A', 'ink-2': '#475569', 'ink-3': '#94A3B8',
+          line: '#E5EAF2',
+          success: '#16A34A', warn: '#F59E0B', danger: '#DC2626',
+        },
+        fontFamily: { sans: ['Manrope', 'sans-serif'], label: ['Inter', 'sans-serif'] },
+        boxShadow: {
+          card:  '0 4px 24px rgba(15, 23, 42, 0.06)',
+          soft:  '0 2px 10px rgba(15, 23, 42, 0.04)',
+          float: '0 12px 32px rgba(0, 88, 188, 0.25)',
+        },
+        borderRadius: { '2xl': '20px', '3xl': '28px' },
+      },
+    },
+  };
+</script>
+<style>
+  html, body { font-family: 'Manrope', sans-serif; background: #EEF2F8; color: #0F172A; overscroll-behavior: none; }
+  .material-symbols-rounded { font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 24; vertical-align: middle; }
+  .icon-filled { font-variation-settings: 'FILL' 1, 'wght' 500, 'GRAD' 0, 'opsz' 24; }
+
+  /* Phone viewport — works as mobile-first; on desktop we wrap in a phone frame */
+  .app-shell { background: #FFFFFF; min-height: 100vh; max-width: 440px; margin: 0 auto; position: relative; overflow: hidden; }
+  @media (min-width: 720px) {
+    body { display: flex; align-items: center; justify-content: center; padding: 32px 0; min-height: 100vh; }
+    .app-shell { width: 420px; height: 880px; min-height: unset; max-height: 880px; border-radius: 44px; border: 10px solid #111827; box-shadow: 0 30px 60px rgba(15,23,42,.25), 0 0 0 2px #1F2937 inset; overflow: hidden; }
+  }
+  .view { display: none; height: 100%; }
+  .view.active { display: block; }
+  .scroll-area { height: 100%; overflow-y: auto; overflow-x: hidden; }
+  .scroll-area::-webkit-scrollbar { display: none; }
+
+  /* Animations */
+  @keyframes scanPulse { 0%,100% { transform: scale(1); opacity: .7; } 50% { transform: scale(1.12); opacity: 1; } }
+  .scan-pulse { animation: scanPulse 1.8s ease-in-out infinite; }
+  @keyframes orbit { from { transform: rotate(0); } to { transform: rotate(360deg); } }
+  .orbit { animation: orbit 8s linear infinite; }
+  @keyframes scanLine { 0% { transform: translateY(-40px); } 100% { transform: translateY(40px); } }
+  .scan-line { animation: scanLine 2.2s ease-in-out infinite alternate; }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+  .fade-up { animation: fadeUp .5s ease-out both; }
+
+  .grid-bg {
+    background-image:
+      linear-gradient(rgba(0,88,188,.06) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,88,188,.06) 1px, transparent 1px);
+    background-size: 18px 18px;
+  }
+  .chip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 999px; font-family: 'Inter'; font-size: 11px; font-weight: 700; }
+
+  /* Hide native file inputs */
+  input[type="file"] { display: none; }
+
+  /* Toast */
+  .toast { position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%); background: #0F172A; color: #fff; padding: 12px 18px; border-radius: 12px; box-shadow: 0 12px 32px rgba(0,0,0,0.25); z-index: 9999; font-size: 13px; font-weight: 500; }
+
+  /* Modal */
+  .modal-back { position: fixed; inset: 0; background: rgba(15,23,42,0.55); display: flex; align-items: center; justify-content: center; z-index: 9000; padding: 20px; }
+  .modal-card { background: #fff; border-radius: 24px; width: 100%; max-width: 380px; padding: 24px; }
+
+  /* Status bar */
+  .status-bar { display: flex; align-items: center; justify-content: space-between; padding: 8px 18px; font-size: 12px; font-weight: 700; color: #0F172A; }
+</style>
+</head>
+
+<body>
+<div class="app-shell" id="shell">
+
+  <!-- Status bar -->
+  <div class="status-bar">
+    <span id="clock">9:41</span>
+    <div style="display:flex;gap:4px;align-items:center;">
+      <span class="material-symbols-rounded" style="font-size:14px;">signal_cellular_alt</span>
+      <span class="material-symbols-rounded" style="font-size:14px;">wifi</span>
+      <span class="material-symbols-rounded" style="font-size:14px;">battery_full</span>
+    </div>
+  </div>
+
+  <!-- ====================================================== -->
+  <!-- 1. SPLASH                                                -->
+  <!-- ====================================================== -->
+  <section class="view active" id="view-splash">
+    <div class="scroll-area" style="background: linear-gradient(180deg, #FFFFFF 0%, #F5F8FC 60%, #E6F0FB 100%);">
+      <div class="relative h-full flex flex-col justify-between px-8 pt-12 pb-10" style="min-height: calc(100vh - 28px);">
+        <div class="absolute top-24 -left-20 w-72 h-72 rounded-full bg-primary opacity-10 blur-3xl"></div>
+        <div class="absolute bottom-40 -right-16 w-64 h-64 rounded-full bg-teal opacity-15 blur-3xl"></div>
+
+        <div class="relative z-10 flex flex-col items-center fade-up">
+          <div class="relative w-28 h-28 rounded-3xl bg-white shadow-card border border-line flex items-center justify-center">
+            <div class="absolute inset-2 rounded-2xl flex items-center justify-center" style="background:linear-gradient(135deg,#0058BC,#00897B);">
+              <span class="material-symbols-rounded icon-filled text-white" style="font-size: 56px;">dentistry</span>
+            </div>
+          </div>
+          <h1 class="mt-8 text-5xl font-extrabold tracking-tight">DHANT</h1>
+          <p class="mt-3 text-primary font-bold text-[10px] tracking-[0.2em] text-center leading-relaxed max-w-[280px]">DENTAL HEALTH ASSESSMENT,<br/>NOTIFICATION AND TRIAGE</p>
+        </div>
+
+        <div class="relative z-10 my-6 flex justify-center fade-up">
+          <div class="relative w-56 h-56">
+            <div class="absolute inset-0 rounded-full" style="background:linear-gradient(135deg,#D8E6FF,#E0F7F4);"></div>
+            <div class="absolute inset-6 rounded-full bg-white shadow-soft flex items-center justify-center">
+              <span class="material-symbols-rounded text-primary" style="font-size: 100px; font-variation-settings: 'FILL' 0, 'wght' 300;">dentistry</span>
+            </div>
+            <span class="material-symbols-rounded absolute top-2 right-4 text-teal" style="font-size: 28px;">auto_awesome</span>
+            <span class="material-symbols-rounded absolute bottom-4 left-2 text-primary opacity-70" style="font-size: 22px;">verified</span>
+          </div>
+        </div>
+
+        <div class="relative z-10 w-full fade-up">
+          <button class="w-full h-14 rounded-2xl bg-primary text-white font-bold text-base shadow-float flex items-center justify-center gap-2 active:scale-[0.98]" onclick="go('disclaimer')">
+            Get Started
+            <span class="material-symbols-rounded">arrow_forward</span>
+          </button>
+          <button class="w-full mt-3 h-11 rounded-xl bg-white border border-line text-primary font-semibold text-sm flex items-center justify-center gap-2" onclick="openApiModal()">
+            <span class="material-symbols-rounded" style="font-size:18px;">key</span>
+            <span id="apiKeyLabel">Configure API Key</span>
+          </button>
+          <div class="flex flex-col items-center mt-5">
+            <img id="jssLogo" src="jss-logo.jpg" onerror="this.onerror=null;this.src='jss%20logo.jpg';this.onerror=function(){this.onerror=null;this.src='jss-logo.png';this.onerror=function(){this.style.display='none';document.getElementById('jssFallback').style.display='flex';};};" alt="JSS Academy of Higher Education &amp; Research" style="height:72px;width:auto;object-fit:contain;" />
+            <div id="jssFallback" style="display:none;align-items:center;gap:8px;">
+              <div style="width:40px;height:40px;border-radius:20px;background:#FFF8E1;border:2px solid #C62828;display:flex;align-items:center;justify-content:center;font-family:Georgia,serif;font-weight:700;font-style:italic;color:#C62828;font-size:14px;">JSS</div>
+              <div style="font-size:9px;font-weight:800;color:#C62828;line-height:1.15;">JSS ACADEMY OF HIGHER<br/>EDUCATION &amp; RESEARCH</div>
+            </div>
+            <p class="text-center mt-2 text-[11px] text-ink-2 font-semibold tracking-wide">Developed at JSSAHER</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================================================== -->
+  <!-- 2. DISCLAIMER                                            -->
+  <!-- ====================================================== -->
+  <section class="view" id="view-disclaimer">
+    <div class="scroll-area bg-white">
+      <!-- App bar -->
+      <div class="flex items-center px-2 h-14 border-b border-line bg-white sticky top-0 z-10">
+        <button class="w-10 h-10 rounded-full flex items-center justify-center" onclick="go('splash')"><span class="material-symbols-rounded">arrow_back</span></button>
+        <span class="flex-1 text-center font-bold">Medical Disclaimer</span>
+        <div class="w-10 h-10"></div>
+      </div>
+
+      <div class="px-5 pt-6 pb-8 space-y-4">
+        <div class="flex flex-col items-center text-center">
+          <div class="relative w-24 h-24">
+            <div class="absolute inset-0 rounded-full bg-warn/15"></div>
+            <div class="absolute inset-3 rounded-full bg-warn/30"></div>
+            <div class="absolute inset-6 rounded-full bg-warn flex items-center justify-center shadow-float" style="box-shadow:0 12px 32px rgba(245,158,11,.4);">
+              <span class="material-symbols-rounded icon-filled text-white" style="font-size: 32px;">gavel</span>
+            </div>
+          </div>
+          <h1 class="text-2xl font-extrabold mt-5">Important Notice</h1>
+          <p class="text-ink-2 text-sm mt-2 max-w-[280px]">Please read carefully before using DHANT's screening results.</p>
+        </div>
+
+        <div class="rounded-3xl bg-white border-2 border-warn/40 p-5 shadow-soft">
+          <div class="flex gap-3">
+            <span class="material-symbols-rounded icon-filled text-warn">priority_high</span>
+            <div><p class="font-bold">Not a medical diagnosis</p><p class="text-sm text-ink-2 mt-1">This app is a <b>screening tool</b> and does not provide a diagnosis. Results indicate possible findings only.</p></div>
+          </div>
+        </div>
+        <div class="rounded-3xl bg-white border border-line p-5 shadow-soft">
+          <div class="flex gap-3">
+            <span class="material-symbols-rounded icon-filled text-primary">medical_services</span>
+            <div><p class="font-bold">Consult a licensed dentist</p><p class="text-sm text-ink-2 mt-1">Always consult a licensed dental professional for proper evaluation and treatment.</p></div>
+          </div>
+        </div>
+        <div class="rounded-3xl bg-white border border-line p-5 shadow-soft">
+          <div class="flex gap-3">
+            <span class="material-symbols-rounded icon-filled text-primary">lock</span>
+            <div><p class="font-bold">Your privacy</p><p class="text-sm text-ink-2 mt-1">Photos are sent directly to your configured API endpoint and are not stored on our servers.</p></div>
+          </div>
+        </div>
+
+        <label class="flex items-center gap-3 rounded-2xl bg-surface-2 p-4 cursor-pointer mt-2" onclick="toggleConsent()">
+          <div id="consentBox" class="w-6 h-6 rounded-md border-2 border-line bg-white flex items-center justify-center"></div>
+          <p class="text-sm font-semibold flex-1">I have read and understand this disclaimer.</p>
+        </label>
+
+        <div class="grid grid-cols-2 gap-3">
+          <button class="h-12 rounded-2xl bg-white border border-line text-ink font-bold text-sm">Privacy Policy</button>
+          <button id="agreeBtn" class="h-12 rounded-2xl bg-surface-3 text-ink-3 font-bold text-sm" onclick="agreeAndContinue()" disabled>I Agree</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================================================== -->
+  <!-- 3. HOME                                                  -->
+  <!-- ====================================================== -->
+  <section class="view" id="view-home">
+    <div class="scroll-area bg-white" style="padding-bottom: 92px;">
+      <div class="flex items-center justify-between px-4 h-14 bg-white">
+        <div class="flex items-center gap-2">
+          <div class="w-9 h-9 rounded-xl flex items-center justify-center" style="background:linear-gradient(135deg,#0058BC,#00897B);">
+            <span class="material-symbols-rounded icon-filled text-white" style="font-size:20px;">dentistry</span>
+          </div>
+          <span class="font-extrabold text-lg tracking-tight">DHANT</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <button class="w-10 h-10 rounded-full flex items-center justify-center" onclick="openApiModal()"><span class="material-symbols-rounded text-ink-2">settings</span></button>
+          <button id="homeAvatar" class="w-10 h-10 rounded-full bg-primary-light flex items-center justify-center text-primary font-bold text-sm" onclick="openProfile()">SU</button>
+        </div>
+      </div>
+
+      <div class="px-5 space-y-5 pt-2">
+        <div>
+          <p class="text-ink-2 text-sm" id="dateLabel"></p>
+          <h1 class="text-3xl font-extrabold tracking-tight mt-1" id="homeGreeting">Hello, there</h1>
+          <p class="text-ink-2 mt-1">Let's check on your oral health today.</p>
+        </div>
+
+        <div class="relative overflow-hidden rounded-3xl p-6 text-white" style="background:linear-gradient(135deg,#0058BC 0%,#003C82 60%,#00897B 130%);">
+          <div class="absolute -right-10 -top-12 w-44 h-44 rounded-full bg-white/10 blur-2xl"></div>
+          <span class="chip bg-white/15 text-white"><span class="material-symbols-rounded" style="font-size:14px;">auto_awesome</span> AI Screening</span>
+          <h2 class="mt-4 text-2xl font-bold leading-snug max-w-[80%]">Upload 5 dental photographs for screening.</h2>
+          <p class="mt-2 text-white/80 text-sm leading-relaxed max-w-[85%]">Receive an assessment in under 2 minutes.</p>
+          <div class="mt-5 flex items-center gap-3 text-white/80 text-sm font-medium">
+            <span class="material-symbols-rounded" style="font-size:18px;">schedule</span>~ 2 min
+            <span class="w-1 h-1 rounded-full bg-white/40"></span>
+            <span class="material-symbols-rounded" style="font-size:18px;">lock</span>Private
+          </div>
+        </div>
+
+        <div class="rounded-3xl bg-white border border-line shadow-soft p-5">
+          <div class="flex justify-between items-center mb-5">
+            <h3 class="font-bold text-lg">Your screening journey</h3>
+            <span class="chip bg-teal-bg text-teal">Ready</span>
+          </div>
+          <div class="relative">
+            <div class="absolute left-[18px] top-7 bottom-7 w-0.5 bg-line"></div>
+            <div class="space-y-5">
+              <div class="flex gap-4 items-start">
+                <div class="z-10 w-9 h-9 rounded-full bg-primary flex items-center justify-center ring-4 ring-white"><span class="material-symbols-rounded text-white" style="font-size:18px;">photo_camera</span></div>
+                <div><p class="font-semibold text-primary text-sm">STEP 1 · Upload</p><p class="text-ink-2 text-sm">Capture 5 intraoral photos.</p></div>
+              </div>
+              <div class="flex gap-4 items-start">
+                <div class="z-10 w-9 h-9 rounded-full bg-teal-bg border-2 border-teal flex items-center justify-center ring-4 ring-white"><span class="material-symbols-rounded text-teal" style="font-size:18px;">auto_awesome</span></div>
+                <div><p class="font-semibold text-sm">STEP 2 · AI Analysis</p><p class="text-ink-2 text-sm">Claude vision model scans for findings.</p></div>
+              </div>
+              <div class="flex gap-4 items-start">
+                <div class="z-10 w-9 h-9 rounded-full bg-surface-3 flex items-center justify-center ring-4 ring-white"><span class="material-symbols-rounded text-ink-3" style="font-size:18px;">assignment_turned_in</span></div>
+                <div><p class="font-semibold text-ink-2 text-sm">STEP 3 · Risk Report</p><p class="text-ink-3 text-sm">Read your personalized report.</p></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div class="rounded-2xl bg-surface-2 border border-line p-4"><p class="text-xs text-ink-2 font-medium">Last screening</p><p class="text-lg font-bold mt-1" id="homeLastScreening">Never</p></div>
+          <div class="rounded-2xl bg-surface-2 border border-line p-4"><p class="text-xs text-ink-2 font-medium">Status</p><p class="text-lg font-bold mt-1 text-ink-3" id="homeStatus">No data yet</p></div>
+        </div>
+
+        <button class="w-full h-14 rounded-2xl bg-primary text-white font-bold text-base shadow-float flex items-center justify-center gap-2" onclick="go('instructions')">
+          Start Screening
+          <span class="material-symbols-rounded">arrow_forward</span>
+        </button>
+      </div>
+    </div>
+    <!-- Bottom nav -->
+    <nav class="absolute bottom-0 left-0 w-full h-20 bg-white border-t border-line flex items-center justify-around pb-2">
+      <a class="flex flex-col items-center gap-1 text-primary cursor-pointer" onclick="go('home')"><span class="material-symbols-rounded icon-filled">home</span><span class="text-[11px] font-bold font-label">Home</span></a>
+      <a class="flex flex-col items-center gap-1 text-ink-3 cursor-pointer" onclick="go('instructions')"><span class="material-symbols-rounded">medical_services</span><span class="text-[11px] font-medium font-label">Screen</span></a>
+      <a class="flex flex-col items-center gap-1 text-ink-3 cursor-pointer"><span class="material-symbols-rounded">history</span><span class="text-[11px] font-medium font-label">History</span></a>
+      <a class="flex flex-col items-center gap-1 text-ink-3 cursor-pointer" onclick="go('research')"><span class="material-symbols-rounded">science</span><span class="text-[11px] font-medium font-label">Research</span></a>
+    </nav>
+  </section>
+
+  <!-- ====================================================== -->
+  <!-- 4. INSTRUCTIONS                                          -->
+  <!-- ====================================================== -->
+  <section class="view" id="view-instructions">
+    <div class="scroll-area bg-white">
+      <div class="flex items-center px-2 h-14 border-b border-line bg-white sticky top-0 z-10">
+        <button class="w-10 h-10 rounded-full flex items-center justify-center" onclick="go('home')"><span class="material-symbols-rounded">arrow_back</span></button>
+        <span class="flex-1 text-center font-bold">Photo Instructions</span>
+        <div class="w-10 h-10"></div>
+      </div>
+      <div class="px-5 pt-4 pb-8 space-y-5">
+        <div>
+          <h1 class="text-2xl font-extrabold">Take 5 clear photos</h1>
+          <p class="text-ink-2 text-sm mt-1">Follow the examples below for the best results.</p>
+        </div>
+        <div class="grid grid-cols-2 gap-3" id="photoExamples"></div>
+        <div class="rounded-3xl bg-white border border-line shadow-soft p-5">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="material-symbols-rounded text-teal">tips_and_updates</span>
+            <h3 class="font-bold">Tips for great photos</h3>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div class="flex items-center gap-2"><div class="w-9 h-9 rounded-full bg-teal-bg flex items-center justify-center"><span class="material-symbols-rounded text-teal" style="font-size:18px;">light_mode</span></div><p class="text-sm font-medium">Good lighting</p></div>
+            <div class="flex items-center gap-2"><div class="w-9 h-9 rounded-full bg-teal-bg flex items-center justify-center"><span class="material-symbols-rounded text-teal" style="font-size:18px;">face</span></div><p class="text-sm font-medium">Mouth open</p></div>
+            <div class="flex items-center gap-2"><div class="w-9 h-9 rounded-full bg-teal-bg flex items-center justify-center"><span class="material-symbols-rounded text-teal" style="font-size:18px;">center_focus_strong</span></div><p class="text-sm font-medium">Clear focus</p></div>
+            <div class="flex items-center gap-2"><div class="w-9 h-9 rounded-full bg-teal-bg flex items-center justify-center"><span class="material-symbols-rounded text-teal" style="font-size:18px;">do_not_disturb_on</span></div><p class="text-sm font-medium">No blur</p></div>
+          </div>
+        </div>
+        <button class="w-full h-14 rounded-2xl bg-primary text-white font-bold text-base shadow-float flex items-center justify-center gap-2" onclick="go('history')">
+          Continue <span class="material-symbols-rounded">arrow_forward</span>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================================================== -->
+  <!-- 4b. PATIENT HISTORY                                       -->
+  <!-- ====================================================== -->
+  <section class="view" id="view-history">
+    <div class="scroll-area bg-white">
+      <div class="flex items-center px-2 h-14 border-b border-line bg-white sticky top-0 z-10">
+        <button class="w-10 h-10 rounded-full flex items-center justify-center" onclick="go('instructions')"><span class="material-symbols-rounded">arrow_back</span></button>
+        <span class="flex-1 text-center font-bold">Patient History</span>
+        <div class="w-10 h-10"></div>
+      </div>
+      <div class="px-5 pt-4 pb-8 space-y-5">
+        <div>
+          <h1 class="text-2xl font-extrabold">Tell us about your oral health</h1>
+          <p class="text-ink-2 text-sm mt-1">This helps the AI contextualize your findings. All fields are optional.</p>
+        </div>
+
+        <!-- Chief complaint -->
+        <div class="rounded-3xl bg-white border border-line shadow-soft p-5 space-y-4">
+          <div class="flex items-center gap-2"><span class="material-symbols-rounded text-primary">help</span><h3 class="font-bold">Why are you screening today?</h3></div>
+          <textarea id="hx-complaint" rows="3" class="w-full rounded-xl border border-line px-3 py-2 text-sm" placeholder="e.g. Tooth pain, routine check, bleeding gums…"></textarea>
+        </div>
+
+        <!-- Symptoms checklist -->
+        <div class="rounded-3xl bg-white border border-line shadow-soft p-5 space-y-3">
+          <div class="flex items-center gap-2"><span class="material-symbols-rounded text-teal">sick</span><h3 class="font-bold">Current symptoms</h3></div>
+          <div id="hx-symptoms" class="grid grid-cols-2 gap-2"></div>
+        </div>
+
+        <!-- Pain level slider -->
+        <div class="rounded-3xl bg-white border border-line shadow-soft p-5 space-y-3">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2"><span class="material-symbols-rounded text-warn">bolt</span><h3 class="font-bold">Pain level</h3></div>
+            <span class="chip bg-warn/10 text-warn" id="hx-pain-label">0 / 10</span>
+          </div>
+          <input id="hx-pain" type="range" min="0" max="10" value="0" class="w-full" oninput="document.getElementById('hx-pain-label').textContent = this.value + ' / 10';" />
+          <div class="flex justify-between text-[10px] font-bold text-ink-3"><span>NONE</span><span>MILD</span><span>SEVERE</span></div>
+        </div>
+
+        <!-- Habits -->
+        <div class="rounded-3xl bg-white border border-line shadow-soft p-5 space-y-4">
+          <div class="flex items-center gap-2"><span class="material-symbols-rounded text-primary">self_care</span><h3 class="font-bold">Habits &amp; routine</h3></div>
+
+          <div>
+            <label class="text-xs font-bold text-ink-2 uppercase tracking-wider">Brushing frequency</label>
+            <div class="mt-2 grid grid-cols-3 gap-2" id="hx-brushing"></div>
+          </div>
+          <div>
+            <label class="text-xs font-bold text-ink-2 uppercase tracking-wider">Flossing</label>
+            <div class="mt-2 grid grid-cols-3 gap-2" id="hx-flossing"></div>
+          </div>
+          <div>
+            <label class="text-xs font-bold text-ink-2 uppercase tracking-wider">Last dental visit</label>
+            <div class="mt-2 grid grid-cols-4 gap-2" id="hx-visit"></div>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <label class="flex items-center gap-2 text-sm font-medium cursor-pointer"><input id="hx-smokes"  type="checkbox" class="w-4 h-4"/> Tobacco user</label>
+            <label class="flex items-center gap-2 text-sm font-medium cursor-pointer"><input id="hx-alcohol" type="checkbox" class="w-4 h-4"/> Alcohol &gt; weekly</label>
+          </div>
+        </div>
+
+        <!-- Medical -->
+        <div class="rounded-3xl bg-white border border-line shadow-soft p-5 space-y-4">
+          <div class="flex items-center gap-2"><span class="material-symbols-rounded text-danger">medical_information</span><h3 class="font-bold">Medical context</h3></div>
+          <div>
+            <label class="text-xs font-bold text-ink-2 uppercase tracking-wider">Conditions</label>
+            <input id="hx-conditions" type="text" class="mt-2 w-full h-11 rounded-xl border border-line px-3 text-sm" placeholder="e.g. Diabetes, hypertension" />
+          </div>
+          <div>
+            <label class="text-xs font-bold text-ink-2 uppercase tracking-wider">Medications</label>
+            <input id="hx-meds" type="text" class="mt-2 w-full h-11 rounded-xl border border-line px-3 text-sm" placeholder="e.g. Metformin" />
+          </div>
+          <div>
+            <label class="text-xs font-bold text-ink-2 uppercase tracking-wider">Allergies</label>
+            <input id="hx-allergies" type="text" class="mt-2 w-full h-11 rounded-xl border border-line px-3 text-sm" placeholder="e.g. Penicillin, latex" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <button class="h-12 rounded-2xl bg-white border border-line text-ink font-bold text-sm" onclick="skipHistory()">Skip</button>
+          <button class="h-12 rounded-2xl bg-primary text-white font-bold text-sm" onclick="saveHistoryAndContinue()">Save &amp; Continue</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================================================== -->
+  <!-- 4c. PROFILE DASHBOARD                                     -->
+  <!-- ====================================================== -->
+  <section class="view" id="view-profile">
+    <div class="scroll-area bg-white">
+      <div class="flex items-center px-2 h-14 border-b border-line bg-white sticky top-0 z-10">
+        <button class="w-10 h-10 rounded-full flex items-center justify-center" onclick="go('home')"><span class="material-symbols-rounded">arrow_back</span></button>
+        <span class="flex-1 text-center font-bold">My Profile</span>
+        <button class="w-10 h-10 rounded-full flex items-center justify-center" onclick="go('profile-edit')"><span class="material-symbols-rounded text-primary">edit</span></button>
+      </div>
+
+      <div class="px-5 pt-6 pb-8 space-y-5" id="profileDashboard"></div>
+    </div>
+  </section>
+
+  <!-- ====================================================== -->
+  <!-- 4d. PROFILE EDITOR                                        -->
+  <!-- ====================================================== -->
+  <section class="view" id="view-profile-edit">
+    <div class="scroll-area bg-white">
+      <div class="flex items-center px-2 h-14 border-b border-line bg-white sticky top-0 z-10">
+        <button class="w-10 h-10 rounded-full flex items-center justify-center" onclick="cancelProfileEdit()"><span class="material-symbols-rounded">arrow_back</span></button>
+        <span class="flex-1 text-center font-bold" id="profileEditTitle">Create Profile</span>
+        <div class="w-10 h-10"></div>
+      </div>
+
+      <div class="px-5 pt-4 pb-8 space-y-4">
+        <div class="flex flex-col items-center">
+          <div class="w-20 h-20 rounded-full bg-primary-light flex items-center justify-center" id="profileEditAvatar">
+            <span class="material-symbols-rounded text-primary" style="font-size:40px;">person</span>
+          </div>
+          <p class="text-xs text-ink-3 mt-2">Patient information</p>
+        </div>
+
+        <div class="rounded-3xl bg-white border border-line shadow-soft p-5 space-y-4">
+          <div>
+            <label class="text-xs font-bold text-ink-2 uppercase tracking-wider">Full name</label>
+            <input id="p-name" type="text" class="mt-2 w-full h-12 rounded-xl border border-line px-3 text-sm" placeholder="e.g. Surya Prakash" />
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="text-xs font-bold text-ink-2 uppercase tracking-wider">Date of birth</label>
+              <input id="p-dob" type="date" class="mt-2 w-full h-12 rounded-xl border border-line px-3 text-sm" oninput="computeAge()" />
+            </div>
+            <div>
+              <label class="text-xs font-bold text-ink-2 uppercase tracking-wider">Age</label>
+              <input id="p-age" type="text" class="mt-2 w-full h-12 rounded-xl border border-line px-3 text-sm bg-surface-2" readonly />
+            </div>
+          </div>
+          <div>
+            <label class="text-xs font-bold text-ink-2 uppercase tracking-wider">Gender</label>
+            <div class="mt-2 grid grid-cols-3 gap-2" id="p-gender"></div>
+          </div>
+          <div>
+            <label class="text-xs font-bold text-ink-2 uppercase tracking-wider">Blood group</label>
+            <div class="mt-2 grid grid-cols-4 gap-2" id="p-blood"></div>
+          </div>
+        </div>
+
+        <div class="rounded-3xl bg-white border border-line shadow-soft p-5 space-y-4">
+          <h3 class="font-bold flex items-center gap-2"><span class="material-symbols-rounded text-primary">contact_phone</span> Contact</h3>
+          <div>
+            <label class="text-xs font-bold text-ink-2 uppercase tracking-wider">Phone</label>
+            <input id="p-phone" type="tel" class="mt-2 w-full h-12 rounded-xl border border-line px-3 text-sm" placeholder="+91 …" />
+          </div>
+          <div>
+            <label class="text-xs font-bold text-ink-2 uppercase tracking-wider">Email</label>
+            <input id="p-email" type="email" class="mt-2 w-full h-12 rounded-xl border border-line px-3 text-sm" placeholder="you@example.com" />
+          </div>
+          <div>
+            <label class="text-xs font-bold text-ink-2 uppercase tracking-wider">Address</label>
+            <textarea id="p-address" rows="2" class="mt-2 w-full rounded-xl border border-line px-3 py-2 text-sm" placeholder="Street, City"></textarea>
+          </div>
+          <div>
+            <label class="text-xs font-bold text-ink-2 uppercase tracking-wider">Emergency contact</label>
+            <input id="p-emergency" type="text" class="mt-2 w-full h-12 rounded-xl border border-line px-3 text-sm" placeholder="Name · phone" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <button class="h-12 rounded-2xl bg-white border border-line text-ink font-bold text-sm" onclick="cancelProfileEdit()">Cancel</button>
+          <button class="h-12 rounded-2xl bg-primary text-white font-bold text-sm" onclick="saveProfile()">Save Profile</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================================================== -->
+  <!-- 5. UPLOAD                                                -->
+  <!-- ====================================================== -->
+  <section class="view" id="view-upload">
+    <div class="scroll-area bg-white">
+      <div class="flex items-center px-2 h-14 border-b border-line bg-white sticky top-0 z-10">
+        <button class="w-10 h-10 rounded-full flex items-center justify-center" onclick="go('instructions')"><span class="material-symbols-rounded">arrow_back</span></button>
+        <span class="flex-1 text-center font-bold">Upload Photos</span>
+        <button class="w-10 h-10 rounded-full flex items-center justify-center" onclick="go('home')"><span class="material-symbols-rounded text-ink-2">close</span></button>
+      </div>
+      <div class="px-5 pt-4 pb-8 space-y-4">
+        <div class="rounded-2xl bg-primary text-white p-4">
+          <div class="flex justify-between items-center">
+            <div>
+              <p class="text-sm opacity-80">Photos uploaded</p>
+              <p class="text-2xl font-extrabold mt-1"><span id="uploadedCount">0</span> <span class="text-base opacity-70 font-semibold">/ 5</span></p>
+            </div>
+            <div class="w-14 h-14 rounded-full bg-white/15 flex items-center justify-center"><span class="material-symbols-rounded text-white">cloud_upload</span></div>
+          </div>
+          <div class="mt-3 h-2 rounded-full bg-white/20 overflow-hidden">
+            <div id="uploadBar" class="h-full bg-teal-light rounded-full transition-all" style="width: 0%;"></div>
+          </div>
+        </div>
+        <div class="space-y-3" id="uploadCards"></div>
+        <button id="analyzeBtn" class="w-full h-14 rounded-2xl bg-surface-3 text-ink-3 font-bold text-base flex items-center justify-center gap-2 cursor-not-allowed" disabled>
+          <span class="material-symbols-rounded">lock</span> <span id="analyzeLabel">Analyze (5 remaining)</span>
+        </button>
+        <p class="text-center text-[11px] text-ink-3" id="analyzeNote"></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================================================== -->
+  <!-- 6. ANALYSIS                                              -->
+  <!-- ====================================================== -->
+  <section class="view" id="view-analysis">
+    <div class="scroll-area" style="background: linear-gradient(180deg, #FFFFFF 0%, #F5F8FC 50%, #E0F7F4 100%);">
+      <div class="flex items-center px-2 h-14">
+        <button class="w-10 h-10 rounded-full flex items-center justify-center" onclick="cancelAnalysis()"><span class="material-symbols-rounded">close</span></button>
+        <span class="flex-1 text-center text-xs font-bold text-ink-2 tracking-[0.2em]">ANALYZING</span>
+        <div class="w-10 h-10"></div>
+      </div>
+
+      <div class="px-5 pb-12 pt-2 flex flex-col items-center text-center">
+        <div class="relative w-72 h-72 mt-4">
+          <div class="absolute inset-0 rounded-full border border-primary/15"></div>
+          <div class="absolute inset-4 rounded-full border border-teal/20"></div>
+          <div class="absolute inset-8 rounded-full border border-primary/10"></div>
+          <div class="absolute inset-0 orbit">
+            <div class="absolute top-0 left-1/2 -translate-x-1/2 w-3 h-3 rounded-full bg-primary shadow-float"></div>
+            <div class="absolute bottom-2 right-6 w-2 h-2 rounded-full bg-teal"></div>
+            <div class="absolute top-8 left-4 w-1.5 h-1.5 rounded-full bg-primary/60"></div>
+          </div>
+          <div class="absolute inset-16 rounded-3xl bg-white shadow-card overflow-hidden grid-bg flex items-center justify-center">
+            <span class="material-symbols-rounded text-primary icon-filled scan-pulse" style="font-size: 80px;">dentistry</span>
+            <div class="absolute left-0 right-0 h-0.5 scan-line" style="background:linear-gradient(90deg, transparent, #00897B, transparent); box-shadow:0 0 10px 2px rgba(0,137,123,.6);"></div>
+          </div>
+          <div class="absolute -bottom-1 -right-1 w-14 h-14 rounded-full flex items-center justify-center shadow-float border-4 border-white" style="background:linear-gradient(135deg,#0058BC,#00897B);">
+            <span class="material-symbols-rounded text-white icon-filled" style="font-size: 28px;">auto_awesome</span>
+          </div>
+        </div>
+
+        <h1 class="text-2xl font-extrabold mt-10" id="analysisTitle">Analyzing your images</h1>
+        <p class="text-ink-2 text-sm mt-2" id="analysisSubtitle">Sending photos to Claude vision model…</p>
+
+        <div class="w-full mt-8">
+          <div class="flex justify-between text-xs font-bold text-ink-2 mb-2">
+            <span id="analysisStep">Step 1 of 3</span>
+            <span class="text-primary" id="analysisPct">0%</span>
+          </div>
+          <div class="h-2 rounded-full bg-surface-3 overflow-hidden">
+            <div id="analysisBar" class="h-full rounded-full transition-all" style="width: 0%; background: linear-gradient(90deg,#0058BC,#00897B);"></div>
+          </div>
+        </div>
+
+        <div class="w-full mt-6 space-y-2" id="phaseList"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================================================== -->
+  <!-- 7. RESULTS                                               -->
+  <!-- ====================================================== -->
+  <section class="view" id="view-results">
+    <div class="scroll-area bg-white">
+      <div class="flex items-center px-2 h-14 border-b border-line bg-white sticky top-0 z-10">
+        <button class="w-10 h-10 rounded-full flex items-center justify-center" onclick="go('home')"><span class="material-symbols-rounded">arrow_back</span></button>
+        <span class="flex-1 text-center font-bold">Your Report</span>
+        <button class="w-10 h-10 rounded-full flex items-center justify-center"><span class="material-symbols-rounded text-ink-2">ios_share</span></button>
+      </div>
+
+      <div class="px-5 pt-4 pb-8 space-y-5">
+        <div id="riskHero" class="rounded-3xl p-5 text-white relative overflow-hidden"></div>
+
+        <div>
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-bold text-lg">Findings</h3>
+            <span class="text-xs text-ink-2 font-bold" id="findingCount">0 detected</span>
+          </div>
+          <div id="findingsList" class="space-y-3"></div>
+        </div>
+
+        <div class="rounded-3xl bg-surface-2 border border-line p-4">
+          <h3 class="font-bold text-sm">Oral health summary</h3>
+          <div class="mt-3 grid grid-cols-3 gap-2 text-center" id="summaryTiles"></div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <button class="h-12 rounded-2xl bg-white border border-primary text-primary font-bold text-sm flex items-center justify-center gap-1" onclick="go('findings')"><span class="material-symbols-rounded" style="font-size:18px;">visibility</span> Details</button>
+          <button class="h-12 rounded-2xl bg-primary text-white font-bold text-sm flex items-center justify-center gap-1" onclick="go('recommendations')">Recommendations <span class="material-symbols-rounded" style="font-size:18px;">arrow_forward</span></button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================================================== -->
+  <!-- 8. FINDINGS                                              -->
+  <!-- ====================================================== -->
+  <section class="view" id="view-findings">
+    <div class="scroll-area bg-white">
+      <div class="flex items-center px-2 h-14 border-b border-line bg-white sticky top-0 z-10">
+        <button class="w-10 h-10 rounded-full flex items-center justify-center" onclick="go('results')"><span class="material-symbols-rounded">arrow_back</span></button>
+        <div class="flex-1 text-center">
+          <p class="font-bold text-sm">Detailed Findings</p>
+          <p class="text-[11px] text-ink-2 font-medium" id="findingsSubtitle">Image 1 of 5</p>
+        </div>
+        <div class="w-10 h-10"></div>
+      </div>
+
+      <div class="px-5 pt-4 pb-8 space-y-4">
+        <div id="findingsImage" class="relative rounded-3xl overflow-hidden aspect-square shadow-card bg-surface-3"></div>
+
+        <div class="flex items-center justify-between">
+          <button class="w-10 h-10 rounded-full bg-surface-2 border border-line flex items-center justify-center" onclick="navFinding(-1)"><span class="material-symbols-rounded">chevron_left</span></button>
+          <div class="flex gap-1.5" id="findingsDots"></div>
+          <button class="w-10 h-10 rounded-full bg-surface-2 border border-line flex items-center justify-center" onclick="navFinding(1)"><span class="material-symbols-rounded">chevron_right</span></button>
+        </div>
+
+        <div class="rounded-3xl bg-white border border-line shadow-soft p-5" id="findingsDetail"></div>
+
+        <button class="w-full h-12 rounded-2xl bg-primary text-white font-bold text-sm flex items-center justify-center gap-2" onclick="go('recommendations')">
+          See recommendations <span class="material-symbols-rounded">arrow_forward</span>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================================================== -->
+  <!-- 9. RECOMMENDATIONS                                       -->
+  <!-- ====================================================== -->
+  <section class="view" id="view-recommendations">
+    <div class="scroll-area bg-white">
+      <div class="flex items-center px-2 h-14 border-b border-line bg-white sticky top-0 z-10">
+        <button class="w-10 h-10 rounded-full flex items-center justify-center" onclick="go('results')"><span class="material-symbols-rounded">arrow_back</span></button>
+        <span class="flex-1 text-center font-bold">Recommendations</span>
+        <button class="w-10 h-10 rounded-full flex items-center justify-center"><span class="material-symbols-rounded text-ink-2">bookmark_border</span></button>
+      </div>
+      <div class="px-5 pt-4 pb-8 space-y-4">
+        <div class="rounded-3xl p-5 text-white" id="urgencyCard" style="background:linear-gradient(135deg,#00897B,#006878);">
+          <div class="flex items-center gap-2"><span class="material-symbols-rounded">event</span><p class="text-xs font-bold uppercase tracking-wider">Suggested Visit</p></div>
+          <h2 class="text-2xl font-extrabold mt-2 leading-tight" id="urgencyTitle">Schedule a dental check-up within 2–4 weeks</h2>
+          <p class="text-white/85 text-sm mt-2" id="urgencyDesc">Findings suggest a routine professional evaluation is advisable.</p>
+          <button class="mt-4 px-4 h-11 rounded-xl bg-white text-teal font-bold text-sm inline-flex items-center gap-2"><span class="material-symbols-rounded" style="font-size:18px;">search</span> Find a dentist nearby</button>
+        </div>
+
+        <div>
+          <h3 class="font-bold mb-2">Daily oral hygiene</h3>
+          <div class="space-y-2">
+            <div class="flex items-center gap-3 rounded-2xl bg-white border border-line shadow-soft p-3"><div class="w-11 h-11 rounded-xl bg-primary-light flex items-center justify-center"><span class="material-symbols-rounded text-primary">brush</span></div><div class="flex-1"><p class="font-bold text-sm">Brush twice daily</p><p class="text-xs text-ink-2">Soft-bristle brush · 2 min each</p></div></div>
+            <div class="flex items-center gap-3 rounded-2xl bg-white border border-line shadow-soft p-3"><div class="w-11 h-11 rounded-xl bg-teal-bg flex items-center justify-center"><span class="material-symbols-rounded text-teal">line_weight</span></div><div class="flex-1"><p class="font-bold text-sm">Floss daily</p><p class="text-xs text-ink-2">Reduces plaque along the gum line</p></div></div>
+            <div class="flex items-center gap-3 rounded-2xl bg-white border border-line shadow-soft p-3"><div class="w-11 h-11 rounded-xl bg-primary-light flex items-center justify-center"><span class="material-symbols-rounded text-primary">water_full</span></div><div class="flex-1"><p class="font-bold text-sm">Rinse with fluoride</p><p class="text-xs text-ink-2">Strengthens enamel</p></div></div>
+          </div>
+        </div>
+
+        <div class="rounded-3xl bg-surface-2 border border-line p-4">
+          <div class="flex items-center gap-2 mb-2"><span class="material-symbols-rounded text-teal">shield</span><h3 class="font-bold text-sm">Preventive care</h3></div>
+          <ul class="space-y-2 text-sm text-ink-2">
+            <li class="flex gap-2"><span class="material-symbols-rounded text-success" style="font-size:18px;">check_circle</span>Limit sugary drinks and snacks</li>
+            <li class="flex gap-2"><span class="material-symbols-rounded text-success" style="font-size:18px;">check_circle</span>Drink water after meals</li>
+            <li class="flex gap-2"><span class="material-symbols-rounded text-success" style="font-size:18px;">check_circle</span>Replace your toothbrush every 3 months</li>
+          </ul>
+        </div>
+
+        <div id="aiAdviceCard" class="rounded-3xl bg-white border border-line shadow-soft p-5" style="display:none;">
+          <div class="flex items-center gap-2 mb-2"><span class="material-symbols-rounded text-primary">auto_awesome</span><h3 class="font-bold text-sm">Personalized advice from AI</h3></div>
+          <p class="text-sm text-ink-2 leading-relaxed" id="aiAdviceText"></p>
+        </div>
+
+        <button class="w-full h-12 rounded-2xl bg-primary text-white font-bold text-sm flex items-center justify-center gap-2" onclick="go('home')">
+          <span class="material-symbols-rounded">home</span> Back to home
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================================================== -->
+  <!-- 10. RESEARCH                                             -->
+  <!-- ====================================================== -->
+  <section class="view" id="view-research">
+    <div class="scroll-area bg-white" style="padding-bottom: 92px;">
+      <div class="flex items-center px-2 h-14 border-b border-line bg-white sticky top-0 z-10">
+        <button class="w-10 h-10 rounded-full flex items-center justify-center" onclick="go('home')"><span class="material-symbols-rounded">arrow_back</span></button>
+        <div class="flex-1 text-center"><p class="font-bold text-sm">Research Dashboard</p><p class="text-[11px] text-ink-2 font-medium">Admin · DHANT Study v1.2</p></div>
+        <button class="w-10 h-10 rounded-full flex items-center justify-center"><span class="material-symbols-rounded text-ink-2">filter_alt</span></button>
+      </div>
+      <div class="px-5 pt-4 space-y-4">
+        <div class="grid grid-cols-2 gap-3">
+          <div class="rounded-2xl bg-primary text-white p-4">
+            <span class="material-symbols-rounded text-white/80" style="font-size:18px;">groups</span>
+            <p class="text-xs opacity-80 mt-1 font-semibold">Patients Screened</p>
+            <p class="text-3xl font-extrabold mt-1" id="rd-patients">0</p>
+            <p class="text-[11px] text-white/80 mt-1 font-medium" id="rd-patients-note">No screenings yet</p>
+          </div>
+          <div class="rounded-2xl bg-teal text-white p-4">
+            <span class="material-symbols-rounded text-white/80" style="font-size:18px;">image</span>
+            <p class="text-xs opacity-80 mt-1 font-semibold">Images Analyzed</p>
+            <p class="text-3xl font-extrabold mt-1" id="rd-images">0</p>
+            <p class="text-[11px] text-white/80 mt-1 font-medium" id="rd-images-note">5 per patient · avg</p>
+          </div>
+          <div class="rounded-2xl bg-white border border-line p-4">
+            <span class="material-symbols-rounded text-primary" style="font-size:18px;">track_changes</span>
+            <p class="text-xs text-ink-2 mt-1 font-semibold">Avg Confidence</p>
+            <p class="text-2xl font-extrabold mt-1" id="rd-accuracy">—</p>
+            <p class="text-[11px] text-ink-2 mt-1 font-bold" id="rd-accuracy-note">Awaiting data</p>
+          </div>
+          <div class="rounded-2xl bg-white border border-line p-4">
+            <span class="material-symbols-rounded text-teal" style="font-size:18px;">speed</span>
+            <p class="text-xs text-ink-2 mt-1 font-semibold">Findings Logged</p>
+            <p class="text-2xl font-extrabold mt-1" id="rd-findings">0</p>
+            <p class="text-[11px] text-ink-2 mt-1 font-medium" id="rd-findings-note">Across all sessions</p>
+          </div>
+        </div>
+
+        <div class="rounded-3xl bg-white border border-line shadow-soft p-5">
+          <div class="flex items-center justify-between">
+            <div><h3 class="font-bold">Risk Distribution</h3><p class="text-xs text-ink-2" id="rd-distribution-sub">No data yet</p></div>
+            <span class="chip bg-surface-3 text-ink-2">All time</span>
+          </div>
+          <div class="mt-4 h-3 rounded-full overflow-hidden flex bg-surface-3">
+            <div class="bg-success" id="rd-bar-low" style="width:0%"></div>
+            <div class="bg-warn"    id="rd-bar-mod" style="width:0%"></div>
+            <div class="bg-danger"  id="rd-bar-high" style="width:0%"></div>
+          </div>
+          <div class="mt-4 grid grid-cols-3 gap-2 text-center">
+            <div><div class="flex items-center justify-center gap-1"><span class="w-2 h-2 rounded-full bg-success"></span><span class="text-[10px] font-bold text-ink-2">LOW</span></div><p class="font-extrabold text-lg mt-1" id="rd-pct-low">0%</p></div>
+            <div><div class="flex items-center justify-center gap-1"><span class="w-2 h-2 rounded-full bg-warn"></span><span class="text-[10px] font-bold text-ink-2">MODERATE</span></div><p class="font-extrabold text-lg mt-1" id="rd-pct-mod">0%</p></div>
+            <div><div class="flex items-center justify-center gap-1"><span class="w-2 h-2 rounded-full bg-danger"></span><span class="text-[10px] font-bold text-ink-2">HIGH</span></div><p class="font-extrabold text-lg mt-1" id="rd-pct-high">0%</p></div>
+          </div>
+        </div>
+
+        <div class="rounded-3xl bg-white border border-line shadow-soft p-5">
+          <div class="flex items-center justify-between mb-3"><h3 class="font-bold">Weekly Screenings</h3><span class="text-xs text-ink-2 font-bold" id="rd-weekly-total">0 total</span></div>
+          <div class="flex items-end gap-2 h-28" id="weeklyChart"></div>
+        </div>
+
+        <div class="rounded-3xl bg-surface-2 border border-line p-4">
+          <h3 class="font-bold text-sm mb-3">Dataset Statistics</h3>
+          <div class="space-y-2 text-sm">
+            <div class="flex justify-between"><span class="text-ink-2">Total samples</span><span class="font-bold" id="rd-ds-total">0</span></div>
+            <div class="flex justify-between"><span class="text-ink-2">Findings logged</span><span class="font-bold" id="rd-ds-findings">0</span></div>
+            <div class="flex justify-between"><span class="text-ink-2">First screening</span><span class="font-bold" id="rd-ds-first">—</span></div>
+            <div class="flex justify-between"><span class="text-ink-2">Last screening</span><span class="font-bold" id="rd-ds-last">—</span></div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <button class="h-12 rounded-2xl bg-white border border-line text-ink font-bold text-sm flex items-center justify-center gap-2" onclick="resetResearch()">
+            <span class="material-symbols-rounded" style="font-size:18px;">restart_alt</span> Reset
+          </button>
+          <button class="h-12 rounded-2xl bg-primary text-white font-bold text-sm flex items-center justify-center gap-2" onclick="exportCSV()">
+            <span class="material-symbols-rounded" style="font-size:18px;">download</span> Export CSV
+          </button>
+        </div>
+      </div>
+    </div>
+    <nav class="absolute bottom-0 left-0 w-full h-20 bg-white border-t border-line flex items-center justify-around pb-2">
+      <a class="flex flex-col items-center gap-1 text-ink-3 cursor-pointer" onclick="go('home')"><span class="material-symbols-rounded">home</span><span class="text-[11px] font-medium font-label">Home</span></a>
+      <a class="flex flex-col items-center gap-1 text-ink-3 cursor-pointer" onclick="go('instructions')"><span class="material-symbols-rounded">medical_services</span><span class="text-[11px] font-medium font-label">Screen</span></a>
+      <a class="flex flex-col items-center gap-1 text-ink-3 cursor-pointer"><span class="material-symbols-rounded">history</span><span class="text-[11px] font-medium font-label">History</span></a>
+      <a class="flex flex-col items-center gap-1 text-primary cursor-pointer"><span class="material-symbols-rounded icon-filled">science</span><span class="text-[11px] font-bold font-label">Research</span></a>
+    </nav>
+  </section>
+
+</div>
+
+<!-- ===== Camera Modal with alignment guide ===== -->
+<div id="cameraModal" style="display:none;position:fixed;inset:0;background:#000;z-index:9500;">
+  <video id="cameraVideo" autoplay playsinline muted style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000;"></video>
+  <canvas id="cameraCanvas" style="display:none;"></canvas>
+
+  <!-- Dimming mask so the guide stands out -->
+  <div style="position:absolute;inset:0;background:radial-gradient(ellipse at center, transparent 35%, rgba(0,0,0,0.5) 80%);pointer-events:none;"></div>
+
+  <!-- Alignment guide overlay -->
+  <div id="cameraGuide" style="position:absolute;left:8%;right:8%;top:18%;bottom:24%;pointer-events:none;display:flex;align-items:center;justify-content:center;"></div>
+
+  <!-- Crosshair centre -->
+  <div style="position:absolute;left:50%;top:42%;transform:translate(-50%,-50%);width:14px;height:14px;border:1.5px solid rgba(255,255,255,0.7);border-radius:50%;pointer-events:none;"></div>
+
+  <!-- Top bar -->
+  <div style="position:absolute;top:0;left:0;right:0;padding:16px;background:linear-gradient(180deg,rgba(0,0,0,0.55),transparent);display:flex;align-items:center;gap:12px;color:#fff;">
+    <button onclick="closeCamera()" style="width:40px;height:40px;border-radius:20px;background:rgba(255,255,255,0.18);display:flex;align-items:center;justify-content:center;">
+      <span class="material-symbols-rounded">close</span>
+    </button>
+    <div style="flex:1;text-align:center;">
+      <p id="cameraTitle" style="font-weight:800;font-size:15px;">Frontal View</p>
+      <p id="cameraSub"   style="font-size:11px;opacity:0.85;">Align with the guide</p>
+    </div>
+    <button onclick="switchCamera()" style="width:40px;height:40px;border-radius:20px;background:rgba(255,255,255,0.18);display:flex;align-items:center;justify-content:center;">
+      <span class="material-symbols-rounded">cameraswitch</span>
+    </button>
+  </div>
+
+  <!-- Hint pill -->
+  <div id="cameraHint" style="position:absolute;left:50%;top:78%;transform:translateX(-50%);background:rgba(0,0,0,0.55);color:#fff;font-size:12px;font-weight:600;padding:8px 14px;border-radius:999px;backdrop-filter:blur(8px);"></div>
+
+  <!-- Reference thumbnail (so the patient sees what the photo should look like) -->
+  <div style="position:absolute;top:64px;right:14px;width:84px;">
+    <div style="position:relative;width:84px;height:84px;border-radius:14px;overflow:hidden;border:2px solid rgba(255,255,255,0.7);box-shadow:0 4px 14px rgba(0,0,0,0.35);" id="cameraReference"></div>
+    <p style="text-align:center;color:#fff;font-size:9px;font-weight:700;letter-spacing:0.5px;margin-top:4px;opacity:0.85;">REFERENCE</p>
+  </div>
+
+  <!-- Step indicator dots -->
+  <div id="cameraSteps" style="position:absolute;left:50%;top:8.5%;transform:translateX(-50%);display:flex;gap:6px;"></div>
+
+  <!-- Capture button -->
+  <div style="position:absolute;bottom:36px;left:0;right:0;display:flex;align-items:center;justify-content:center;gap:32px;">
+    <button onclick="closeCamera()" style="color:#fff;font-size:14px;font-weight:700;opacity:0.85;background:none;">Cancel</button>
+    <button onclick="capturePhoto()" style="width:76px;height:76px;border-radius:38px;background:#fff;border:4px solid rgba(255,255,255,0.4);box-shadow:0 6px 20px rgba(0,0,0,0.4);">
+      <div style="width:100%;height:100%;border-radius:50%;background:#fff;border:3px solid rgba(0,0,0,0.15);"></div>
+    </button>
+    <button id="cameraTorch" style="color:#fff;font-size:14px;font-weight:700;opacity:0.85;background:none;display:flex;align-items:center;gap:4px;" onclick="toggleTorch()">
+      <span class="material-symbols-rounded">flash_off</span>
+    </button>
+  </div>
+</div>
+
+<!-- ===== API Key Modal ===== -->
+<div id="apiModal" class="modal-back" style="display:none;">
+  <div class="modal-card">
+    <div class="flex items-center gap-2 mb-2">
+      <span class="material-symbols-rounded text-primary">key</span>
+      <h2 class="font-bold text-lg">API Configuration</h2>
+    </div>
+    <p class="text-sm text-ink-2">Choose a provider and paste your API key. The key is stored locally in your browser only.</p>
+
+    <div class="mt-4">
+      <label class="text-xs font-bold text-ink-2 uppercase tracking-wider">Provider</label>
+      <div class="mt-2 grid grid-cols-3 gap-2">
+        <button class="provider-btn h-10 rounded-xl border-2 text-xs font-bold" data-provider="anthropic">Claude</button>
+        <button class="provider-btn h-10 rounded-xl border-2 text-xs font-bold" data-provider="openai">GPT-4o</button>
+        <button class="provider-btn h-10 rounded-xl border-2 text-xs font-bold" data-provider="groq">Groq</button>
+      </div>
+    </div>
+
+    <div class="mt-4">
+      <label class="text-xs font-bold text-ink-2 uppercase tracking-wider">API Key</label>
+      <input id="apiKeyInput" type="password" placeholder="sk-..." class="mt-2 w-full h-12 rounded-xl border border-line px-3 text-sm font-mono" />
+      <label class="mt-2 flex items-center gap-2 text-xs text-ink-2 cursor-pointer">
+        <input id="showKey" type="checkbox" /> Show key
+      </label>
+    </div>
+
+    <div class="mt-4">
+      <label class="text-xs font-bold text-ink-2 uppercase tracking-wider">Model</label>
+      <input id="modelInput" type="text" class="mt-2 w-full h-12 rounded-xl border border-line px-3 text-sm font-mono" />
+      <p class="text-[11px] text-ink-3 mt-1">Default: <span id="modelHint"></span></p>
+    </div>
+
+    <div class="mt-4 flex gap-2">
+      <button class="h-11 px-4 rounded-xl border border-line text-sm font-bold flex-1" onclick="clearApiKey()">Clear</button>
+      <button class="h-11 px-4 rounded-xl bg-primary text-white text-sm font-bold flex-1" onclick="saveApiKey()">Save</button>
+    </div>
+    <button class="mt-2 w-full h-10 rounded-xl text-ink-2 text-sm font-bold" onclick="closeApiModal()">Close</button>
+  </div>
+</div>
+
+<div id="toast" class="toast" style="display:none;"></div>
+
+<script>
+// ==========================================================
+//  DHANT — Application logic
+// ==========================================================
+
+const PHOTO_SLOTS = [
+  { id: 'frontal', title: 'Frontal View',  hint: 'Teeth together, lips relaxed',  icon: 'sentiment_satisfied' },
+  { id: 'upper',   title: 'Upper Arch',    hint: 'Tilt head back, mouth open',     icon: 'expand_less' },
+  { id: 'lower',   title: 'Lower Arch',    hint: 'Tilt chin down, mouth open',     icon: 'expand_more' },
+  { id: 'left',    title: 'Left Side',     hint: 'Pull cheek back, show molars',   icon: 'arrow_back' },
+  { id: 'right',   title: 'Right Side',    hint: 'Pull cheek back, show molars',   icon: 'arrow_forward' },
+];
+
+const SEVERITY = {
+  low:      { label: 'Low',      color: '#0058BC', bg: '#EAF1FB' },
+  moderate: { label: 'Moderate', color: '#F59E0B', bg: '#FEF3C7' },
+  high:     { label: 'Elevated', color: '#DC2626', bg: '#FEE2E2' },
+};
+
+const DEFAULT_MODELS = {
+  anthropic: 'claude-sonnet-4-5',
+  openai:    'gpt-4o',
+  groq:      'meta-llama/llama-4-scout-17b-16e-instruct',
+};
+
+const PROVIDER_LABEL = {
+  anthropic: 'Claude',
+  openai:    'GPT-4o',
+  groq:      'Groq',
+};
+
+// ----- State -----
+const state = {
+  consent: false,
+  current: 'splash',
+  photos: {},               // { slotId: { dataUrl, mediaType, base64 } }
+  findings: [],             // [{ id, slotId, label, severity, confidence, box, description }]
+  overall: null,            // { level, score }
+  recommendation: null,     // { urgency, advice }
+  findingIndex: 0,
+  analysisAbort: false,
+  provider: 'anthropic',
+  apiKey: '',
+  model: '',
+};
+
+PHOTO_SLOTS.forEach(s => { state.photos[s.id] = null; });
+
+// ----- Patient profile + history -----
+const PROFILE_KEY = 'dhant.profile';
+const HISTORY_KEY = 'dhant.history';
+
+function loadProfile() {
+  try { return JSON.parse(localStorage.getItem(PROFILE_KEY) || 'null'); } catch (e) { return null; }
+}
+function saveProfileObj(p) { localStorage.setItem(PROFILE_KEY, JSON.stringify(p)); }
+
+function loadHistory() {
+  try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || 'null'); } catch (e) { return null; }
+}
+function saveHistoryObj(h) { localStorage.setItem(HISTORY_KEY, JSON.stringify(h)); }
+
+state.profile = loadProfile();
+state.history = loadHistory();
+
+const SYMPTOM_LIST  = ['Tooth pain', 'Bleeding gums', 'Bad breath', 'Sensitivity', 'Mouth ulcers', 'Loose teeth', 'Jaw pain', 'Dry mouth'];
+const GENDER_LIST   = ['Male', 'Female', 'Other'];
+const BLOOD_LIST    = ['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'];
+const BRUSH_LIST    = ['Once', 'Twice', 'After meals'];
+const FLOSS_LIST    = ['Daily', 'Sometimes', 'Never'];
+const VISIT_LIST    = ['< 6 mo', '6–12 mo', '1–2 yrs', '> 2 yrs'];
+
+function initials(name) {
+  if (!name) return '?';
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  const first  = parts[0][0] || '';
+  const second = parts.length > 1 ? (parts[parts.length - 1][0] || '') : '';
+  return (first + second).toUpperCase() || '?';
+}
+function firstName(name) { return name ? name.trim().split(/\s+/)[0] : ''; }
+
+// ----- Home greeting + avatar -----
+function refreshHomeIdentity() {
+  const p = state.profile;
+  const greeting = document.getElementById('homeGreeting');
+  const avatar   = document.getElementById('homeAvatar');
+  if (p && p.name) {
+    greeting.textContent = `Hello, ${firstName(p.name)}`;
+    avatar.textContent   = initials(p.name);
+  } else {
+    greeting.textContent = 'Welcome to DHANT';
+    avatar.textContent   = '+';
+  }
+
+  // Last screening + Status tiles — driven by research history.
+  const r = loadResearch();
+  const lastEl   = document.getElementById('homeLastScreening');
+  const statusEl = document.getElementById('homeStatus');
+  if (r && r.patients > 0 && r.lastAt) {
+    lastEl.textContent = relativeTime(r.lastAt);
+    const s = STATUS_BY_LEVEL[r.lastOverall] || { text: r.lastOverall || '—', color: '#0F172A' };
+    statusEl.textContent = s.text;
+    statusEl.style.color = s.color;
+  } else {
+    lastEl.textContent = 'Never';
+    lastEl.style.color = '#94A3B8';
+    statusEl.textContent = 'No data yet';
+    statusEl.style.color = '#94A3B8';
+  }
+}
+
+// ----- Profile editor render -----
+function renderProfileEditor() {
+  const p = state.profile || {};
+  document.getElementById('p-name').value      = p.name      || '';
+  document.getElementById('p-dob').value       = p.dob       || '';
+  document.getElementById('p-age').value       = p.age       || '';
+  document.getElementById('p-phone').value     = p.phone     || '';
+  document.getElementById('p-email').value     = p.email     || '';
+  document.getElementById('p-address').value   = p.address   || '';
+  document.getElementById('p-emergency').value = p.emergency || '';
+
+  buildChoiceRow('p-gender', GENDER_LIST, p.gender, (v) => state._draftGender = v);
+  buildChoiceRow('p-blood',  BLOOD_LIST,  p.blood,  (v) => state._draftBlood  = v);
+  state._draftGender = p.gender || '';
+  state._draftBlood  = p.blood  || '';
+
+  document.getElementById('profileEditTitle').textContent = state.profile ? 'Edit Profile' : 'Create Profile';
+
+  // Avatar
+  const av = document.getElementById('profileEditAvatar');
+  if (p.name) {
+    av.innerHTML = `<span class="text-primary font-extrabold" style="font-size:28px;">${initials(p.name)}</span>`;
+  } else {
+    av.innerHTML = `<span class="material-symbols-rounded text-primary" style="font-size:40px;">person</span>`;
+  }
+}
+
+function buildChoiceRow(containerId, options, current, onPick) {
+  const c = document.getElementById(containerId);
+  c.innerHTML = options.map(o => `
+    <button type="button" class="choice-btn h-10 rounded-xl border-2 text-xs font-bold"
+      data-value="${o}"
+      style="border-color:${current === o ? '#0058BC' : '#E5EAF2'};color:${current === o ? '#0058BC' : '#475569'};background:${current === o ? '#EAF1FB' : '#FFFFFF'};">
+      ${o}
+    </button>
+  `).join('');
+  c.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+    c.querySelectorAll('button').forEach(x => { x.style.borderColor = '#E5EAF2'; x.style.color = '#475569'; x.style.background = '#FFFFFF'; });
+    b.style.borderColor = '#0058BC'; b.style.color = '#0058BC'; b.style.background = '#EAF1FB';
+    onPick(b.dataset.value);
+  }));
+}
+
+function computeAge() {
+  const dob = document.getElementById('p-dob').value;
+  if (!dob) { document.getElementById('p-age').value = ''; return; }
+  const today = new Date(), birth = new Date(dob);
+  let age = today.getFullYear() - birth.getFullYear();
+  const m = today.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+  document.getElementById('p-age').value = age >= 0 ? age + ' yrs' : '';
+}
+
+function saveProfile() {
+  const name = document.getElementById('p-name').value.trim();
+  if (!name) { toast('Please enter the patient name'); return; }
+  const p = {
+    name,
+    dob:       document.getElementById('p-dob').value,
+    age:       document.getElementById('p-age').value,
+    gender:    state._draftGender || '',
+    blood:     state._draftBlood  || '',
+    phone:     document.getElementById('p-phone').value.trim(),
+    email:     document.getElementById('p-email').value.trim(),
+    address:   document.getElementById('p-address').value.trim(),
+    emergency: document.getElementById('p-emergency').value.trim(),
+    createdAt: state.profile?.createdAt || Date.now(),
+    updatedAt: Date.now(),
+  };
+  state.profile = p;
+  saveProfileObj(p);
+  refreshHomeIdentity();
+  toast('Profile saved');
+  go('profile');
+}
+
+function cancelProfileEdit() {
+  if (state.profile) go('profile'); else go('home');
+}
+
+function openProfile() {
+  if (state.profile) go('profile'); else go('profile-edit');
+}
+
+// ----- Profile dashboard render -----
+function renderProfileDashboard() {
+  const p = state.profile;
+  const h = state.history;
+  const c = document.getElementById('profileDashboard');
+  if (!p) { c.innerHTML = `
+    <div class="text-center py-12">
+      <span class="material-symbols-rounded text-primary" style="font-size:64px;">person_add</span>
+      <h2 class="font-bold text-xl mt-3">No profile yet</h2>
+      <p class="text-ink-2 text-sm mt-2">Create your patient profile to personalize screenings.</p>
+      <button class="mt-6 px-6 h-12 rounded-2xl bg-primary text-white font-bold text-sm" onclick="go('profile-edit')">Create Profile</button>
+    </div>`; return; }
+
+  const r = (loadResearch && loadResearch()) || { patients: 0, findings: 0, lastAt: null };
+
+  c.innerHTML = `
+    <div class="flex items-center gap-4">
+      <div class="w-20 h-20 rounded-3xl bg-primary-light flex items-center justify-center text-primary font-extrabold" style="font-size:28px;">${initials(p.name)}</div>
+      <div class="flex-1">
+        <h1 class="text-2xl font-extrabold">${p.name}</h1>
+        <p class="text-ink-2 text-sm mt-1">${[p.age, p.gender, p.blood].filter(Boolean).join(' · ') || 'Patient'}</p>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-3 gap-3">
+      <div class="rounded-2xl bg-primary text-white p-3"><p class="text-[10px] font-bold opacity-80 uppercase tracking-wider">Screenings</p><p class="text-2xl font-extrabold mt-1">${r.patients}</p></div>
+      <div class="rounded-2xl bg-teal text-white p-3"><p class="text-[10px] font-bold opacity-80 uppercase tracking-wider">Findings</p><p class="text-2xl font-extrabold mt-1">${r.findings}</p></div>
+      <div class="rounded-2xl bg-surface-2 border border-line p-3"><p class="text-[10px] font-bold text-ink-2 uppercase tracking-wider">Last</p><p class="text-sm font-extrabold mt-1">${r.lastAt ? new Date(r.lastAt).toLocaleDateString() : '—'}</p></div>
+    </div>
+
+    <div class="rounded-3xl bg-white border border-line shadow-soft p-5">
+      <h3 class="font-bold mb-3 flex items-center gap-2"><span class="material-symbols-rounded text-primary">badge</span> Personal</h3>
+      ${row('Full name', p.name)}
+      ${row('Date of birth', p.dob || '—')}
+      ${row('Age', p.age || '—')}
+      ${row('Gender', p.gender || '—')}
+      ${row('Blood group', p.blood || '—')}
+    </div>
+
+    <div class="rounded-3xl bg-white border border-line shadow-soft p-5">
+      <h3 class="font-bold mb-3 flex items-center gap-2"><span class="material-symbols-rounded text-teal">contact_phone</span> Contact</h3>
+      ${row('Phone', p.phone || '—')}
+      ${row('Email', p.email || '—')}
+      ${row('Address', p.address || '—')}
+      ${row('Emergency', p.emergency || '—')}
+    </div>
+
+    ${h ? `
+    <div class="rounded-3xl bg-white border border-line shadow-soft p-5">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="font-bold flex items-center gap-2"><span class="material-symbols-rounded text-warn">history_edu</span> Medical history</h3>
+        <button class="text-primary text-xs font-bold" onclick="go('history')">Edit</button>
+      </div>
+      ${row('Reason for visit', h.complaint || '—')}
+      ${row('Symptoms', (h.symptoms || []).join(', ') || '—')}
+      ${row('Pain level', (h.pain ?? '0') + ' / 10')}
+      ${row('Brushing', h.brushing || '—')}
+      ${row('Flossing', h.flossing || '—')}
+      ${row('Last dental visit', h.lastVisit || '—')}
+      ${row('Tobacco', h.smokes ? 'Yes' : 'No')}
+      ${row('Alcohol weekly', h.alcohol ? 'Yes' : 'No')}
+      ${row('Conditions', h.conditions || '—')}
+      ${row('Medications', h.medications || '—')}
+      ${row('Allergies', h.allergies || '—')}
+    </div>` : `
+    <div class="rounded-3xl bg-warn/10 border border-warn/30 p-4 text-center">
+      <p class="text-sm font-bold text-ink">No medical history recorded</p>
+      <p class="text-xs text-ink-2 mt-1">Add it to improve AI screening accuracy.</p>
+      <button class="mt-3 px-4 h-10 rounded-xl bg-warn text-white text-xs font-bold" onclick="go('history')">Add history</button>
+    </div>`}
+
+    <div class="grid grid-cols-2 gap-3">
+      <button class="h-12 rounded-2xl bg-white border border-line text-danger font-bold text-sm" onclick="deleteProfile()">Delete profile</button>
+      <button class="h-12 rounded-2xl bg-primary text-white font-bold text-sm" onclick="go('profile-edit')">Edit profile</button>
+    </div>
+  `;
+}
+function row(k, v) {
+  return `<div class="flex justify-between py-2 border-b border-line last:border-0"><span class="text-xs text-ink-2 font-semibold">${k}</span><span class="text-sm font-bold text-right max-w-[60%]">${v}</span></div>`;
+}
+
+function deleteProfile() {
+  if (!confirm('Delete this profile? Medical history will also be cleared.')) return;
+  localStorage.removeItem(PROFILE_KEY);
+  localStorage.removeItem(HISTORY_KEY);
+  state.profile = null;
+  state.history = null;
+  refreshHomeIdentity();
+  go('home');
+  toast('Profile deleted');
+}
+
+// ----- History form -----
+state._draftSymptoms = new Set();
+state._draftBrushing = '';
+state._draftFlossing = '';
+state._draftVisit    = '';
+
+function renderHistoryForm() {
+  const h = state.history || {};
+  document.getElementById('hx-complaint').value   = h.complaint   || '';
+  document.getElementById('hx-pain').value        = h.pain ?? 0;
+  document.getElementById('hx-pain-label').textContent = (h.pain ?? 0) + ' / 10';
+  document.getElementById('hx-smokes').checked    = !!h.smokes;
+  document.getElementById('hx-alcohol').checked   = !!h.alcohol;
+  document.getElementById('hx-conditions').value  = h.conditions  || '';
+  document.getElementById('hx-meds').value        = h.medications || '';
+  document.getElementById('hx-allergies').value   = h.allergies   || '';
+
+  // Symptoms
+  state._draftSymptoms = new Set(h.symptoms || []);
+  const sc = document.getElementById('hx-symptoms');
+  sc.innerHTML = SYMPTOM_LIST.map(s => {
+    const on = state._draftSymptoms.has(s);
+    return `<button type="button" class="h-10 rounded-xl border-2 text-xs font-bold flex items-center gap-1 px-3" data-sym="${s}"
+      style="border-color:${on ? '#0058BC' : '#E5EAF2'};color:${on ? '#0058BC' : '#475569'};background:${on ? '#EAF1FB' : '#FFFFFF'};">
+      <span class="material-symbols-rounded" style="font-size:14px;">${on ? 'check_circle' : 'add'}</span>${s}
+    </button>`;
+  }).join('');
+  sc.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+    const v = b.dataset.sym;
+    if (state._draftSymptoms.has(v)) state._draftSymptoms.delete(v); else state._draftSymptoms.add(v);
+    renderHistoryForm();
+  }));
+
+  buildChoiceRow('hx-brushing', BRUSH_LIST, h.brushing,  (v) => state._draftBrushing = v);
+  buildChoiceRow('hx-flossing', FLOSS_LIST, h.flossing,  (v) => state._draftFlossing = v);
+  buildChoiceRow('hx-visit',    VISIT_LIST, h.lastVisit, (v) => state._draftVisit    = v);
+  state._draftBrushing = h.brushing  || '';
+  state._draftFlossing = h.flossing  || '';
+  state._draftVisit    = h.lastVisit || '';
+}
+
+function saveHistoryAndContinue() {
+  const h = {
+    complaint:   document.getElementById('hx-complaint').value.trim(),
+    symptoms:    Array.from(state._draftSymptoms),
+    pain:        parseInt(document.getElementById('hx-pain').value, 10),
+    brushing:    state._draftBrushing,
+    flossing:    state._draftFlossing,
+    lastVisit:   state._draftVisit,
+    smokes:      document.getElementById('hx-smokes').checked,
+    alcohol:     document.getElementById('hx-alcohol').checked,
+    conditions:  document.getElementById('hx-conditions').value.trim(),
+    medications: document.getElementById('hx-meds').value.trim(),
+    allergies:   document.getElementById('hx-allergies').value.trim(),
+    updatedAt:   Date.now(),
+  };
+  state.history = h;
+  saveHistoryObj(h);
+  toast('History saved');
+  go('upload');
+}
+
+function skipHistory() { go('upload'); }
+
+// ----- Navigation -----
+function go(view) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('view-' + view).classList.add('active');
+  state.current = view;
+  document.querySelector('.scroll-area')?.scrollTo?.(0, 0);
+  if (view === 'analysis')     startAnalysis();
+  if (view === 'findings')     renderFindings();
+  if (view === 'research')     renderResearch();
+  if (view === 'profile')      renderProfileDashboard();
+  if (view === 'profile-edit') renderProfileEditor();
+  if (view === 'history')      renderHistoryForm();
+  if (view === 'home')         refreshHomeIdentity();
+}
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.display = 'block';
+  clearTimeout(t._h);
+  t._h = setTimeout(() => t.style.display = 'none', 3500);
+}
+
+// ----- Clock -----
+function updateClock() {
+  const d = new Date();
+  document.getElementById('clock').textContent =
+    d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
+}
+setInterval(updateClock, 30000);
+updateClock();
+
+document.getElementById('dateLabel').textContent =
+  new Date().toLocaleDateString(undefined, { weekday:'long', month:'long', day:'numeric' });
+
+// ----- Disclaimer -----
+function toggleConsent() {
+  state.consent = !state.consent;
+  const box = document.getElementById('consentBox');
+  const btn = document.getElementById('agreeBtn');
+  if (state.consent) {
+    box.style.background = '#0058BC'; box.style.borderColor = '#0058BC';
+    box.innerHTML = '<span class="material-symbols-rounded text-white" style="font-size:18px;">check</span>';
+    btn.disabled = false;
+    btn.className = 'h-12 rounded-2xl bg-primary text-white font-bold text-sm';
+  } else {
+    box.style.background = '#fff'; box.style.borderColor = '#E5EAF2'; box.innerHTML = '';
+    btn.disabled = true;
+    btn.className = 'h-12 rounded-2xl bg-surface-3 text-ink-3 font-bold text-sm';
+  }
+}
+function agreeAndContinue() { if (state.consent) go('home'); }
+
+// ----- Instructions photo examples -----
+// ----- Intraoral illustration + camera guide SVGs -----
+// Two variants: 'illustration' = filled (for the Instructions screen),
+//               'guide'        = stroked only (for the live camera overlay).
+function intraOralSVG(slotId, variant = 'illustration') {
+  const fill   = variant === 'illustration';
+  const lipsFill   = fill ? '#FBBFB3' : 'none';
+  const gumFill    = fill ? '#FF7884' : 'none';
+  const toothFill  = fill ? '#FFFFFF' : 'none';
+  const mouthDark  = fill ? '#3B1A1F' : 'none';
+  const strokeMain = fill ? '#7A1F2A' : '#FFFFFF';
+  const strokeTeeth= fill ? '#94A3B8' : '#FFFFFF';
+  const dash       = variant === 'guide' ? 'stroke-dasharray="4 4"' : '';
+  const sw         = variant === 'guide' ? 2 : 1.5;
+
+  if (slotId === 'frontal') {
+    return `<svg viewBox="0 0 100 100" width="100%" height="100%">
+      <!-- lips -->
+      <ellipse cx="50" cy="50" rx="42" ry="20" fill="${lipsFill}" stroke="${strokeMain}" stroke-width="${sw}" ${dash}/>
+      <!-- mouth opening -->
+      <ellipse cx="50" cy="50" rx="34" ry="12" fill="${mouthDark}" stroke="${strokeMain}" stroke-width="${sw*0.8}"/>
+      <!-- upper teeth -->
+      ${[18,26,34,42,50,58,66,74].map((x,i) => `<rect x="${x-3}" y="${42}" width="6" height="8" rx="1.5" fill="${toothFill}" stroke="${strokeTeeth}" stroke-width="0.6"/>`).join('')}
+      <!-- lower teeth -->
+      ${[18,26,34,42,50,58,66,74].map((x,i) => `<rect x="${x-3}" y="${50}" width="6" height="8" rx="1.5" fill="${toothFill}" stroke="${strokeTeeth}" stroke-width="0.6"/>`).join('')}
+      <!-- centre alignment line -->
+      ${variant === 'guide' ? '<line x1="50" y1="20" x2="50" y2="80" stroke="#FFFFFF" stroke-width="1" stroke-dasharray="2 3" opacity="0.7"/>' : ''}
+    </svg>`;
+  }
+
+  if (slotId === 'upper') {
+    // Upper arch — horseshoe opening DOWNWARD (anteriors at top, molars on sides going down)
+    // Camera points up into the mouth. Arrow indicates head tilt.
+    return `<svg viewBox="0 0 100 100" width="100%" height="100%">
+      <!-- Outer arch (lip/cheek line) -->
+      <path d="M 16 84 L 16 38 Q 16 12 50 12 Q 84 12 84 38 L 84 84"
+        fill="${gumFill}" stroke="${strokeMain}" stroke-width="${sw}" ${dash} stroke-linecap="round" stroke-linejoin="round"/>
+      <!-- Inner arch (palate boundary) -->
+      <path d="M 32 84 L 32 46 Q 32 28 50 28 Q 68 28 68 46 L 68 84"
+        fill="${variant === 'illustration' ? '#FF6276' : 'none'}" stroke="${strokeTeeth}" stroke-width="${sw*0.7}" ${dash} opacity="0.75" stroke-linecap="round" stroke-linejoin="round"/>
+      <!-- Teeth ticks between the two arches (12 markers) -->
+      ${variant === 'illustration' ? horseshoeTeeth('upper', toothFill, strokeTeeth) : ''}
+      ${variant === 'guide' ? `
+        <!-- Tilt-head-back arrow + label -->
+        <g opacity="0.95">
+          <path d="M 50 90 L 50 80 M 45 85 L 50 80 L 55 85" stroke="#FFFFFF" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          <text x="50" y="97" font-size="5.5" fill="#FFFFFF" text-anchor="middle" font-family="Inter" font-weight="700" letter-spacing="0.4">TILT HEAD BACK</text>
+          <text x="50" y="22" font-size="4" fill="#FFFFFF" text-anchor="middle" font-family="Inter" font-weight="600" opacity="0.75">FRONT TEETH</text>
+        </g>` : ''}
+    </svg>`;
+  }
+
+  if (slotId === 'lower') {
+    // Lower arch — horseshoe opening UPWARD (anteriors at bottom, molars on sides going up)
+    return `<svg viewBox="0 0 100 100" width="100%" height="100%">
+      <path d="M 16 16 L 16 62 Q 16 88 50 88 Q 84 88 84 62 L 84 16"
+        fill="${gumFill}" stroke="${strokeMain}" stroke-width="${sw}" ${dash} stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M 32 16 L 32 54 Q 32 72 50 72 Q 68 72 68 54 L 68 16"
+        fill="${variant === 'illustration' ? '#A0566A' : 'none'}" stroke="${strokeTeeth}" stroke-width="${sw*0.7}" ${dash} opacity="0.75" stroke-linecap="round" stroke-linejoin="round"/>
+      ${variant === 'illustration' ? horseshoeTeeth('lower', toothFill, strokeTeeth) : ''}
+      ${variant === 'guide' ? `
+        <g opacity="0.95">
+          <path d="M 50 10 L 50 20 M 45 15 L 50 20 L 55 15" stroke="#FFFFFF" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          <text x="50" y="6" font-size="5.5" fill="#FFFFFF" text-anchor="middle" font-family="Inter" font-weight="700" letter-spacing="0.4">TILT CHIN DOWN</text>
+          <text x="50" y="82" font-size="4" fill="#FFFFFF" text-anchor="middle" font-family="Inter" font-weight="600" opacity="0.75">FRONT TEETH</text>
+        </g>` : ''}
+    </svg>`;
+  }
+
+  if (slotId === 'left' || slotId === 'right') {
+    // Right buccal: cheek retractor on LEFT of frame, anteriors LEFT, molars RIGHT.
+    // Left  buccal: mirror — retractor on RIGHT, anteriors RIGHT, molars LEFT.
+    // We draw the right-buccal layout and flip horizontally for the left.
+    const flip = slotId === 'left' ? 'transform="translate(100,0) scale(-1,1)"' : '';
+    return `<svg viewBox="0 0 100 100" width="100%" height="100%">
+      <g ${flip}>
+        <!-- Cheek retractor (C-shape opening rightwards on the LEFT side of frame) -->
+        <path d="M 22 22 Q 6 30 6 50 Q 6 70 22 78"
+          fill="none" stroke="${strokeMain}" stroke-width="${sw}" ${dash} stroke-linecap="round"/>
+        <path d="M 24 30 Q 14 38 14 50 Q 14 62 24 70"
+          fill="none" stroke="${strokeMain}" stroke-width="${sw*0.7}" ${dash} opacity="0.7" stroke-linecap="round"/>
+
+        <!-- Upper teeth row corridor -->
+        <path d="M 28 36 L 92 36" stroke="${strokeMain}" stroke-width="${sw*0.8}" ${dash} fill="none" stroke-linecap="round"/>
+        <path d="M 28 48 L 92 48" stroke="${strokeMain}" stroke-width="${sw*0.6}" ${dash} fill="none" opacity="0.65" stroke-linecap="round"/>
+
+        <!-- Lower teeth row corridor (teeth meet at occlusion line ~y=50) -->
+        <path d="M 28 52 L 92 52" stroke="${strokeMain}" stroke-width="${sw*0.6}" ${dash} fill="none" opacity="0.65" stroke-linecap="round"/>
+        <path d="M 28 64 L 92 64" stroke="${strokeMain}" stroke-width="${sw*0.8}" ${dash} fill="none" stroke-linecap="round"/>
+
+        <!-- Occlusion centre dotted line -->
+        <line x1="28" y1="50" x2="92" y2="50" stroke="${strokeMain}" stroke-width="0.5" stroke-dasharray="1 2" opacity="0.6"/>
+
+        ${variant === 'illustration' ? `
+          ${[32,42,52,62,72,82].map(x => `<rect x="${x-4}" y="38" width="8" height="9" rx="1.5" fill="${toothFill}" stroke="${strokeTeeth}" stroke-width="0.5"/>`).join('')}
+          ${[32,42,52,62,72,82].map(x => `<rect x="${x-4}" y="53" width="8" height="9" rx="1.5" fill="${toothFill}" stroke="${strokeTeeth}" stroke-width="0.5"/>`).join('')}
+        ` : ''}
+
+        ${variant === 'guide' ? `
+          <!-- "Pull cheek back" arrow pointing further away from teeth -->
+          <g opacity="0.95">
+            <path d="M 14 14 L 4 14 M 8 10 L 4 14 L 8 18" stroke="#FFFFFF" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+            <text x="60" y="12" font-size="5" fill="#FFFFFF" font-family="Inter" font-weight="700" letter-spacing="0.4" text-anchor="middle">PULL CHEEK BACK</text>
+            <text x="32" y="92" font-size="4" fill="#FFFFFF" font-family="Inter" font-weight="600" opacity="0.75" text-anchor="middle">FRONT</text>
+            <text x="84" y="92" font-size="4" fill="#FFFFFF" font-family="Inter" font-weight="600" opacity="0.75" text-anchor="middle">BACK</text>
+          </g>` : ''}
+      </g>
+    </svg>`;
+  }
+  return '';
+}
+
+function archTeeth(which, toothFill, stroke) {
+  // Legacy oval-arc tooth layout (kept for reference).
+  const pts = which === 'upper'
+    ? [[24,30],[30,26],[38,24],[46,23],[54,23],[62,24],[70,26],[76,30],[80,38],[80,48],[78,58]]
+    : [[24,70],[30,74],[38,76],[46,77],[54,77],[62,76],[70,74],[76,70],[80,62],[80,52],[78,42]];
+  return pts.map(([x,y]) =>
+    `<rect x="${x-3}" y="${y-3}" width="6" height="6" rx="1.5" fill="${toothFill}" stroke="${stroke}" stroke-width="0.6"/>`
+  ).join('');
+}
+
+function horseshoeTeeth(which, fill, stroke) {
+  // 14 teeth positioned in the corridor between outer (16-84) and inner (32-68) arches.
+  // x≈24 is the midline between the two arch walls; same on the right at x≈76.
+  const upper = [
+    // left posterior → premolar → canine
+    [24,76],[24,66],[24,56],[24,46],[26,36],[32,26],
+    // front incisors across the top
+    [40,20],[46,18],[54,18],[60,20],
+    // right canine → premolar → posterior
+    [68,26],[74,36],[76,46],[76,56],[76,66],[76,76],
+  ];
+  const lower = [
+    [24,24],[24,34],[24,44],[24,54],[26,64],[32,74],
+    [40,80],[46,82],[54,82],[60,80],
+    [68,74],[74,64],[76,54],[76,44],[76,34],[76,24],
+  ];
+  const pts = which === 'upper' ? upper : lower;
+  return pts.map(([x,y]) =>
+    `<rect x="${x-2.5}" y="${y-2.5}" width="5" height="5" rx="1.2" fill="${fill}" stroke="${stroke}" stroke-width="0.5"/>`
+  ).join('');
+}
+
+// Resolve a reference photo: tries .jpg → .png in instructions-photos/, then falls back to SVG.
+function referencePhotoHTML(slotId, opts = {}) {
+  const size      = opts.size      || '100%';
+  const radius    = opts.radius    || '0';
+  const bgFill    = opts.bgFill    !== false;
+  const svgInset  = opts.svgInset  || '10%';
+  const jpg = `instructions-photos/${slotId}.jpg`;
+  const png = `instructions-photos/${slotId}.png`;
+  return `
+    <div style="position:absolute;inset:0;border-radius:${radius};overflow:hidden;${bgFill ? 'background:linear-gradient(135deg,#FFE7E2,#FFF4F1);' : ''}">
+      <img
+        src="${jpg}"
+        onerror="this.onerror=null;this.src='${png}';this.onerror=function(){this.style.display='none';this.nextElementSibling.style.display='block';};"
+        style="width:100%;height:100%;object-fit:cover;display:block;" />
+      <div style="display:none;position:absolute;inset:${svgInset};">${intraOralSVG(slotId, 'illustration')}</div>
+    </div>`;
+}
+
+(function renderExamples() {
+  const c = document.getElementById('photoExamples');
+  c.innerHTML = PHOTO_SLOTS.map((s, i) => `
+    <div class="rounded-2xl bg-surface-2 border border-line overflow-hidden">
+      <div class="aspect-square relative">
+        ${referencePhotoHTML(s.id)}
+        <span class="absolute top-2 left-2 chip bg-white/90 text-primary" style="z-index:2;">${i+1}</span>
+      </div>
+      <div class="px-3 py-2"><p class="font-bold text-sm">${s.title}</p><p class="text-xs text-ink-2">${s.hint}</p></div>
+    </div>
+  `).join('');
+})();
+
+// ----- Upload screen -----
+function renderUploadCards() {
+  const c = document.getElementById('uploadCards');
+  c.innerHTML = PHOTO_SLOTS.map(slot => {
+    const photo = state.photos[slot.id];
+    const filled = !!photo;
+    if (filled) {
+      return `
+        <div class="rounded-2xl bg-white border border-line shadow-soft p-3 flex items-center gap-3">
+          <div class="w-16 h-16 rounded-xl overflow-hidden relative">
+            <img src="${photo.dataUrl}" class="w-full h-full object-cover" />
+            <div class="absolute inset-0 ring-2 ring-success/50 rounded-xl"></div>
+          </div>
+          <div class="flex-1">
+            <p class="font-bold text-sm">${slot.title}</p>
+            <p class="text-xs text-success font-medium flex items-center gap-1"><span class="material-symbols-rounded" style="font-size:14px;">check_circle</span>Uploaded</p>
+          </div>
+          <button class="w-9 h-9 rounded-full bg-surface-2 flex items-center justify-center" onclick="clearPhoto('${slot.id}')">
+            <span class="material-symbols-rounded text-ink-2" style="font-size:18px;">refresh</span>
+          </button>
+        </div>`;
+    }
+    return `
+      <div class="rounded-2xl bg-surface-2 border-2 border-dashed border-line p-3 flex items-center gap-3 hover:border-primary transition">
+        <div class="w-16 h-16 rounded-xl bg-white border border-line flex items-center justify-center">
+          <span class="material-symbols-rounded text-ink-3" style="font-size:28px;">add_a_photo</span>
+        </div>
+        <div class="flex-1">
+          <p class="font-bold text-sm">${slot.title}</p>
+          <p class="text-xs text-ink-3">${slot.hint}</p>
+        </div>
+        <div class="flex gap-1.5">
+          <button class="w-8 h-8 rounded-full bg-primary flex items-center justify-center" onclick="openCamera('${slot.id}')">
+            <span class="material-symbols-rounded text-white" style="font-size:16px;">photo_camera</span>
+          </button>
+          <label class="w-8 h-8 rounded-full bg-surface-3 flex items-center justify-center cursor-pointer">
+            <span class="material-symbols-rounded text-ink-2" style="font-size:16px;">upload</span>
+            <input type="file" accept="image/*" onchange="onFile(event, '${slot.id}')" />
+          </label>
+        </div>
+      </div>`;
+  }).join('');
+  updateUploadProgress();
+}
+
+function clearPhoto(slotId) {
+  state.photos[slotId] = null;
+  renderUploadCards();
+}
+
+function onFile(ev, slotId) {
+  const file = ev.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const dataUrl = reader.result;
+    const [meta, b64] = dataUrl.split(',');
+    const mediaType = (meta.match(/data:(.*?);/) || [,'image/jpeg'])[1];
+    state.photos[slotId] = { dataUrl, mediaType, base64: b64 };
+    renderUploadCards();
+  };
+  reader.readAsDataURL(file);
+}
+
+// ----- In-app camera with alignment guide -----
+const CAMERA_HINTS = {
+  frontal: 'Center your smile, teeth lightly touching',
+  upper:   'Tilt your head back, open wide, point camera up into the mouth',
+  lower:   'Lower jaw forward, tilt chin down, point camera into the mouth',
+  left:    'Pull the left cheek back, expose the molars',
+  right:   'Pull the right cheek back, expose the molars',
+};
+
+let cameraStream  = null;
+let cameraSlot    = null;
+let cameraFacing  = 'environment';
+let cameraTorchOn = false;
+
+async function openCamera(slotId) {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    toast('Live camera not available in this browser. Use the upload button instead.');
+    return;
+  }
+  cameraSlot = slotId;
+  const slot = PHOTO_SLOTS.find(s => s.id === slotId);
+  document.getElementById('cameraTitle').textContent = slot.title;
+  document.getElementById('cameraSub').textContent   = slot.hint;
+  document.getElementById('cameraHint').textContent  = CAMERA_HINTS[slotId] || slot.hint;
+  document.getElementById('cameraGuide').innerHTML   = intraOralSVG(slotId, 'guide');
+  document.getElementById('cameraReference').innerHTML = referencePhotoHTML(slotId, { svgInset: '6%' });
+
+  // Step indicator dots — show progress through the 5 photos
+  const dots = document.getElementById('cameraSteps');
+  dots.innerHTML = PHOTO_SLOTS.map(s => {
+    const isThis = s.id === slotId;
+    const done   = !!state.photos[s.id];
+    return `<span style="width:${isThis ? '22' : '8'}px;height:8px;border-radius:4px;background:${isThis ? '#fff' : done ? 'rgba(255,255,255,0.65)' : 'rgba(255,255,255,0.3)'};"></span>`;
+  }).join('');
+
+  document.getElementById('cameraModal').style.display = 'block';
+
+  try {
+    cameraStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: cameraFacing, width: { ideal: 1920 }, height: { ideal: 1920 } },
+      audio: false,
+    });
+    const video = document.getElementById('cameraVideo');
+    video.srcObject = cameraStream;
+    await video.play().catch(() => {});
+    setTorchButtonAvailability();
+  } catch (e) {
+    toast('Camera unavailable: ' + (e.message || 'permission denied'));
+    closeCamera();
+  }
+}
+
+function stopCameraStream() {
+  if (cameraStream) {
+    cameraStream.getTracks().forEach(t => t.stop());
+    cameraStream = null;
+  }
+  cameraTorchOn = false;
+}
+
+function closeCamera() {
+  stopCameraStream();
+  document.getElementById('cameraModal').style.display = 'none';
+  cameraSlot = null;
+}
+
+async function switchCamera() {
+  cameraFacing = cameraFacing === 'environment' ? 'user' : 'environment';
+  const slot = cameraSlot;
+  stopCameraStream();
+  if (slot) await openCamera(slot);
+}
+
+function setTorchButtonAvailability() {
+  const btn = document.getElementById('cameraTorch');
+  if (!cameraStream) { btn.style.opacity = 0.4; return; }
+  const track = cameraStream.getVideoTracks()[0];
+  const caps  = track && track.getCapabilities ? track.getCapabilities() : {};
+  btn.style.opacity = caps.torch ? 0.85 : 0.35;
+}
+
+async function toggleTorch() {
+  if (!cameraStream) return;
+  const track = cameraStream.getVideoTracks()[0];
+  const caps  = track && track.getCapabilities ? track.getCapabilities() : {};
+  if (!caps.torch) { toast('Torch not available on this device'); return; }
+  try {
+    cameraTorchOn = !cameraTorchOn;
+    await track.applyConstraints({ advanced: [{ torch: cameraTorchOn }] });
+    document.getElementById('cameraTorch').querySelector('.material-symbols-rounded').textContent = cameraTorchOn ? 'flash_on' : 'flash_off';
+  } catch (e) { toast('Cannot toggle torch'); }
+}
+
+function capturePhoto() {
+  if (!cameraStream) return;
+  const video  = document.getElementById('cameraVideo');
+  const canvas = document.getElementById('cameraCanvas');
+  const w = video.videoWidth  || 1280;
+  const h = video.videoHeight || 1280;
+  canvas.width  = w;
+  canvas.height = h;
+  canvas.getContext('2d').drawImage(video, 0, 0, w, h);
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.88);
+  const base64  = dataUrl.split(',')[1];
+  const slot    = cameraSlot;
+
+  state.photos[slot] = { dataUrl, mediaType: 'image/jpeg', base64 };
+  renderUploadCards();
+
+  // Auto-advance to the next empty slot, or close after all 5.
+  const next = PHOTO_SLOTS.find(s => !state.photos[s.id]);
+  if (next) {
+    cameraSlot = next.id;
+    // Briefly flash, then reload with the next slot's overlay.
+    const flash = document.createElement('div');
+    flash.style.cssText = 'position:absolute;inset:0;background:#fff;opacity:0.85;z-index:99;pointer-events:none;';
+    document.getElementById('cameraModal').appendChild(flash);
+    setTimeout(() => {
+      flash.remove();
+      document.getElementById('cameraTitle').textContent = next.title;
+      document.getElementById('cameraSub').textContent   = next.hint;
+      document.getElementById('cameraHint').textContent  = CAMERA_HINTS[next.id] || next.hint;
+      document.getElementById('cameraGuide').innerHTML   = intraOralSVG(next.id, 'guide');
+      document.getElementById('cameraReference').innerHTML = referencePhotoHTML(next.id, { svgInset: '6%' });
+      const dots = document.getElementById('cameraSteps');
+      dots.innerHTML = PHOTO_SLOTS.map(s => {
+        const isThis = s.id === next.id;
+        const done   = !!state.photos[s.id];
+        return `<span style="width:${isThis ? '22' : '8'}px;height:8px;border-radius:4px;background:${isThis ? '#fff' : done ? 'rgba(255,255,255,0.65)' : 'rgba(255,255,255,0.3)'};"></span>`;
+      }).join('');
+    }, 180);
+  } else {
+    toast('All 5 photos captured');
+    closeCamera();
+  }
+}
+
+function updateUploadProgress() {
+  const count = Object.values(state.photos).filter(Boolean).length;
+  document.getElementById('uploadedCount').textContent = count;
+  document.getElementById('uploadBar').style.width = (count / 5 * 100) + '%';
+  const btn = document.getElementById('analyzeBtn');
+  const lbl = document.getElementById('analyzeLabel');
+  const note = document.getElementById('analyzeNote');
+  if (count === 5) {
+    btn.disabled = false;
+    btn.className = 'w-full h-14 rounded-2xl bg-primary text-white font-bold text-base shadow-float flex items-center justify-center gap-2';
+    btn.onclick = () => go('analysis');
+    btn.querySelector('.material-symbols-rounded').textContent = 'auto_awesome';
+    lbl.textContent = state.apiKey ? `Analyze with ${PROVIDER_LABEL[state.provider]}` : 'Analyze (Demo mode)';
+    note.textContent = state.apiKey ? `Photos will be sent to ${PROVIDER_LABEL[state.provider]} for analysis.` : 'No API key — results will be simulated.';
+  } else {
+    btn.disabled = true;
+    btn.className = 'w-full h-14 rounded-2xl bg-surface-3 text-ink-3 font-bold text-base flex items-center justify-center gap-2 cursor-not-allowed';
+    btn.onclick = null;
+    btn.querySelector('.material-symbols-rounded').textContent = 'lock';
+    lbl.textContent = `Analyze (${5 - count} remaining)`;
+    note.textContent = '';
+  }
+}
+
+// ----- API Key Modal -----
+function openApiModal() {
+  document.getElementById('apiModal').style.display = 'flex';
+  document.getElementById('apiKeyInput').value = state.apiKey;
+  document.getElementById('modelInput').value  = state.model || DEFAULT_MODELS[state.provider];
+  setProvider(state.provider);
+}
+function closeApiModal() { document.getElementById('apiModal').style.display = 'none'; }
+
+function setProvider(p) {
+  state.provider = p;
+  document.querySelectorAll('.provider-btn').forEach(b => {
+    const on = b.dataset.provider === p;
+    b.style.borderColor = on ? '#0058BC' : '#E5EAF2';
+    b.style.color = on ? '#0058BC' : '#475569';
+    b.style.background = on ? '#EAF1FB' : '#FFFFFF';
+  });
+  document.getElementById('modelHint').textContent = DEFAULT_MODELS[p];
+  if (!state.model) document.getElementById('modelInput').value = DEFAULT_MODELS[p];
+}
+
+document.querySelectorAll('.provider-btn').forEach(b => b.addEventListener('click', () => setProvider(b.dataset.provider)));
+document.getElementById('showKey').addEventListener('change', e => {
+  document.getElementById('apiKeyInput').type = e.target.checked ? 'text' : 'password';
+});
+
+function saveApiKey() {
+  state.apiKey = document.getElementById('apiKeyInput').value.trim();
+  state.model  = document.getElementById('modelInput').value.trim() || DEFAULT_MODELS[state.provider];
+  localStorage.setItem('dhaant.apiKey',   state.apiKey);
+  localStorage.setItem('dhaant.provider', state.provider);
+  localStorage.setItem('dhaant.model',    state.model);
+  updateApiKeyLabel();
+  updateUploadProgress();
+  closeApiModal();
+  toast(state.apiKey ? 'API key saved' : 'Demo mode enabled');
+}
+function clearApiKey() {
+  state.apiKey = '';
+  localStorage.removeItem('dhaant.apiKey');
+  document.getElementById('apiKeyInput').value = '';
+  updateApiKeyLabel();
+  updateUploadProgress();
+  toast('API key cleared — demo mode active');
+}
+function updateApiKeyLabel() {
+  const lbl = document.getElementById('apiKeyLabel');
+  if (state.apiKey) {
+    const tail = state.apiKey.slice(-4);
+    lbl.textContent = `API key set · …${tail}`;
+  } else {
+    lbl.textContent = 'Configure API Key (optional)';
+  }
+}
+
+(function loadStoredKey() {
+  state.apiKey   = localStorage.getItem('dhaant.apiKey')   || '';
+  state.provider = localStorage.getItem('dhaant.provider') || 'anthropic';
+  state.model    = localStorage.getItem('dhaant.model')    || '';
+  updateApiKeyLabel();
+})();
+
+// ----- Analysis -----
+const PHASES = [
+  { label: 'Preparing images…',            pct: 25 },
+  { label: 'Sending to AI vision model…',  pct: 60 },
+  { label: 'Generating risk assessment…',  pct: 95 },
+];
+
+function renderPhases(currentIdx) {
+  const c = document.getElementById('phaseList');
+  c.innerHTML = PHASES.map((p, i) => {
+    const done = i < currentIdx;
+    const active = i === currentIdx;
+    return `
+      <div class="flex items-center gap-3 bg-white border ${active ? 'border-2 border-primary' : 'border-line'} rounded-2xl p-3 ${!done && !active ? 'opacity-60' : ''}">
+        <div class="w-8 h-8 rounded-full flex items-center justify-center ${done ? 'bg-success/15' : active ? 'bg-primary/15' : 'bg-surface-3'}">
+          <span class="material-symbols-rounded ${active ? 'scan-pulse' : ''}" style="font-size:18px;color:${done ? '#16A34A' : active ? '#0058BC' : '#94A3B8'};">
+            ${done ? 'check_circle' : active ? 'progress_activity' : 'pending'}
+          </span>
+        </div>
+        <p class="text-sm font-bold flex-1 text-left">${p.label}</p>
+        <span class="text-xs font-bold" style="color:${done ? '#94A3B8' : active ? '#0058BC' : '#94A3B8'};">${done ? 'Done' : active ? 'Now' : 'Queued'}</span>
+      </div>`;
+  }).join('');
+}
+
+function setProgress(pct, stepIdx, subtitle) {
+  document.getElementById('analysisBar').style.width = pct + '%';
+  document.getElementById('analysisPct').textContent = pct + '%';
+  document.getElementById('analysisStep').textContent = `Step ${stepIdx + 1} of ${PHASES.length}`;
+  if (subtitle) document.getElementById('analysisSubtitle').textContent = subtitle;
+  renderPhases(stepIdx);
+}
+
+function cancelAnalysis() {
+  state.analysisAbort = true;
+  go('upload');
+}
+
+async function startAnalysis() {
+  state.analysisAbort = false;
+  setProgress(5, 0, 'Encoding 5 photographs…');
+  await sleep(700);
+  if (state.analysisAbort) return;
+
+  setProgress(25, 0, 'Photographs encoded.');
+  await sleep(400);
+  setProgress(35, 1, state.apiKey
+    ? `Sending to ${PROVIDER_LABEL[state.provider]}…`
+    : 'Running in demo mode (no API key)…');
+
+  let result;
+  try {
+    result = state.apiKey ? await callAI() : await simulateAI();
+  } catch (err) {
+    toast('AI call failed: ' + (err.message || 'unknown error') + ' — using simulated results.');
+    result = await simulateAI();
+  }
+  if (state.analysisAbort) return;
+
+  setProgress(75, 2, 'Generating risk assessment…');
+  await sleep(700);
+
+  state.findings = result.findings;
+  state.overall = result.overall;
+  state.recommendation = result.recommendation;
+  setProgress(100, 3, 'Done.');
+  await sleep(400);
+
+  // Persist this screening into the research dashboard.
+  recordScreening({
+    overall: state.overall,
+    findings: state.findings,
+    imagesCount: Object.values(state.photos).filter(Boolean).length,
+  });
+  renderResearch();
+
+  renderResults();
+  go('results');
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ----- Simulated demo findings -----
+async function simulateAI() {
+  await sleep(1400);
+  const findings = [
+    { id: 'f1', slotId: 'upper',   label: 'Possible caries',       severity: 'moderate', confidence: 0.82, box: { x: 0.18, y: 0.22, w: 0.30, h: 0.22 }, description: 'Demineralization signs on the upper-left first molar.' },
+    { id: 'f2', slotId: 'upper',   label: 'Gingival inflammation', severity: 'high',     confidence: 0.88, box: { x: 0.48, y: 0.52, w: 0.24, h: 0.18 }, description: 'Localized redness near the upper-left canine.' },
+    { id: 'f3', slotId: 'frontal', label: 'Plaque accumulation',   severity: 'low',      confidence: 0.74, box: { x: 0.18, y: 0.55, w: 0.32, h: 0.18 }, description: 'Visible plaque along the lower front teeth.' },
+    { id: 'f4', slotId: 'right',   label: 'Gingival inflammation', severity: 'moderate', confidence: 0.78, box: { x: 0.20, y: 0.45, w: 0.28, h: 0.20 }, description: 'Slight gum swelling on the right side.' },
+    { id: 'f5', slotId: 'left',    label: 'Possible caries',       severity: 'moderate', confidence: 0.77, box: { x: 0.55, y: 0.30, w: 0.25, h: 0.20 }, description: 'Surface irregularity on a left molar.' },
+  ];
+  return packageResult(findings, 'Schedule a dental check-up within 2–4 weeks. Findings suggest routine professional evaluation is advisable.');
+}
+
+function packageResult(findings, urgency, advice) {
+  const overall = computeOverall(findings);
+  return { findings, overall, recommendation: { urgency, advice: advice || '' } };
+}
+
+function computeOverall(findings) {
+  if (!findings.length) return { level: 'Low', score: 1.0 };
+  const w = { low: 1, moderate: 2.4, high: 4 };
+  const total = findings.reduce((s, f) => s + (w[f.severity] || 1) * (f.confidence || 1), 0);
+  const score = Math.min(10, +(total * 1.4).toFixed(1));
+  const level = score >= 7 ? 'High' : score >= 4 ? 'Moderate' : 'Low';
+  return { level, score };
+}
+
+// ----- Live AI call -----
+const SYSTEM_PROMPT =
+`You are a research-grade dental screening assistant. You receive 5 intraoral photographs and must output a JSON report.
+Important rules:
+- This is a SCREENING TOOL — never diagnose. Use phrasing like "possible", "suspected", "appears", "may indicate".
+- Only identify visually observable findings. If uncertain, lower the confidence.
+- Severity must be one of: "low", "moderate", "high".
+- Bounding boxes are normalized coordinates 0..1 over the corresponding image (x, y is top-left corner; w, h are width and height).
+- slotId must be one of: frontal, upper, lower, left, right (corresponding to the labels of each image you receive).
+- Confidence is a number 0..1.
+- Return ONLY valid JSON. No prose, no markdown fences.
+
+Schema:
+{
+  "findings": [
+    { "slotId": "upper", "label": "Possible caries", "severity": "moderate", "confidence": 0.82, "box": {"x":0.1,"y":0.2,"w":0.3,"h":0.2}, "description": "short clinical observation" }
+  ],
+  "urgency": "Short sentence on recommended next step (visit timing).",
+  "advice": "1-2 sentences of personalized oral hygiene advice based on findings."
+}`;
+
+async function callAI() {
+  if (state.provider === 'anthropic') return callAnthropic();
+  if (state.provider === 'groq')      return callGroq();
+  return callOpenAI();
+}
+
+function patientContextText() {
+  const p = state.profile || {};
+  const h = state.history || {};
+  const lines = [];
+  if (p.name)   lines.push(`Patient: ${p.name}`);
+  if (p.age)    lines.push(`Age: ${p.age}`);
+  if (p.gender) lines.push(`Gender: ${p.gender}`);
+  if (h.complaint)   lines.push(`Chief complaint: ${h.complaint}`);
+  if (h.symptoms?.length) lines.push(`Reported symptoms: ${h.symptoms.join(', ')}`);
+  if (h.pain != null) lines.push(`Pain level: ${h.pain}/10`);
+  if (h.brushing)    lines.push(`Brushing: ${h.brushing}`);
+  if (h.flossing)    lines.push(`Flossing: ${h.flossing}`);
+  if (h.lastVisit)   lines.push(`Last dental visit: ${h.lastVisit}`);
+  if (h.smokes)      lines.push(`Tobacco use: yes`);
+  if (h.alcohol)     lines.push(`Alcohol weekly: yes`);
+  if (h.conditions)  lines.push(`Medical conditions: ${h.conditions}`);
+  if (h.medications) lines.push(`Medications: ${h.medications}`);
+  if (h.allergies)   lines.push(`Allergies: ${h.allergies}`);
+  return lines.length ? `Patient context:\n${lines.join('\n')}` : '';
+}
+
+async function callGroq() {
+  const slots = PHOTO_SLOTS.filter(s => state.photos[s.id]);
+  const ctx = patientContextText();
+  const content = [{ type: 'text', text: (ctx ? ctx + '\n\n' : '') + 'Analyze these 5 intraoral photographs and return findings as JSON per the schema. Each image is preceded by its slotId.' }];
+  slots.forEach(s => {
+    content.push({ type: 'text', text: `slotId: ${s.id} (${s.title})` });
+    content.push({ type: 'image_url', image_url: { url: state.photos[s.id].dataUrl } });
+  });
+
+  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${state.apiKey}` },
+    body: JSON.stringify({
+      model: state.model || DEFAULT_MODELS.groq,
+      response_format: { type: 'json_object' },
+      max_tokens: 1500,
+      temperature: 0.3,
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content },
+      ],
+    }),
+  });
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(`Groq ${res.status}: ${t.slice(0, 200)}`);
+  }
+  const json = await res.json();
+  const text = json.choices[0].message.content.trim();
+  return parseAIResponse(text);
+}
+
+async function callAnthropic() {
+  const slots = PHOTO_SLOTS.filter(s => state.photos[s.id]);
+  const ctx = patientContextText();
+  const content = [{ type: 'text', text: (ctx ? ctx + '\n\n' : '') + 'Analyze these 5 intraoral photographs and return findings as JSON per the schema. The images are labeled below in order.' }];
+  slots.forEach(s => {
+    content.push({ type: 'text', text: `Image — slotId: ${s.id} (${s.title})` });
+    content.push({
+      type: 'image',
+      source: { type: 'base64', media_type: state.photos[s.id].mediaType, data: state.photos[s.id].base64 },
+    });
+  });
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-api-key': state.apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({
+      model: state.model || DEFAULT_MODELS.anthropic,
+      max_tokens: 1500,
+      system: SYSTEM_PROMPT,
+      messages: [{ role: 'user', content }],
+    }),
+  });
+
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(`Anthropic ${res.status}: ${t.slice(0, 200)}`);
+  }
+  const json = await res.json();
+  const text = json.content.map(c => c.text || '').join('').trim();
+  return parseAIResponse(text);
+}
+
+async function callOpenAI() {
+  const slots = PHOTO_SLOTS.filter(s => state.photos[s.id]);
+  const ctx = patientContextText();
+  const content = [{ type: 'text', text: (ctx ? ctx + '\n\n' : '') + 'Analyze these 5 intraoral photographs and return findings as JSON per the schema. Each image is preceded by its slotId.' }];
+  slots.forEach(s => {
+    content.push({ type: 'text', text: `slotId: ${s.id} (${s.title})` });
+    content.push({ type: 'image_url', image_url: { url: state.photos[s.id].dataUrl } });
+  });
+
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${state.apiKey}` },
+    body: JSON.stringify({
+      model: state.model || DEFAULT_MODELS.openai,
+      response_format: { type: 'json_object' },
+      max_tokens: 1500,
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content },
+      ],
+    }),
+  });
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(`OpenAI ${res.status}: ${t.slice(0, 200)}`);
+  }
+  const json = await res.json();
+  const text = json.choices[0].message.content.trim();
+  return parseAIResponse(text);
+}
+
+function parseAIResponse(text) {
+  // Strip code fences if present
+  text = text.replace(/^```(?:json)?\s*/i, '').replace(/```$/, '').trim();
+  // Try to locate JSON if model added prose
+  const first = text.indexOf('{');
+  const last  = text.lastIndexOf('}');
+  if (first >= 0 && last > first) text = text.slice(first, last + 1);
+
+  let data;
+  try { data = JSON.parse(text); } catch (e) { throw new Error('Could not parse AI JSON output'); }
+
+  const findings = (data.findings || []).map((f, i) => ({
+    id: 'ai' + i,
+    slotId: f.slotId || 'frontal',
+    label: f.label || 'Finding',
+    severity: ['low','moderate','high'].includes(f.severity) ? f.severity : 'moderate',
+    confidence: typeof f.confidence === 'number' ? Math.max(0, Math.min(1, f.confidence)) : 0.7,
+    box: f.box && typeof f.box === 'object'
+      ? { x: clamp01(f.box.x), y: clamp01(f.box.y), w: clamp01(f.box.w), h: clamp01(f.box.h) }
+      : { x: 0.2, y: 0.3, w: 0.3, h: 0.2 },
+    description: f.description || '',
+  }));
+
+  return packageResult(findings, data.urgency || 'Consult a dentist for routine evaluation.', data.advice || '');
+}
+
+function clamp01(v) { v = parseFloat(v); if (isNaN(v)) return 0.2; return Math.max(0, Math.min(1, v)); }
+
+// ----- Results screen -----
+function renderResults() {
+  const hero = document.getElementById('riskHero');
+  const o = state.overall;
+  const grad =
+    o.level === 'High'     ? ['#DC2626', '#9B1C1C'] :
+    o.level === 'Moderate' ? ['#F59E0B', '#D97706'] :
+                             ['#16A34A', '#15803D'];
+  const pos = Math.min(96, Math.max(2, (o.score / 10) * 100));
+  hero.style.background = `linear-gradient(135deg, ${grad[0]} 0%, ${grad[1]} 100%)`;
+  hero.innerHTML = `
+    <div class="absolute -top-6 -right-6 w-32 h-32 rounded-full bg-white/15 blur-2xl"></div>
+    <p class="text-sm font-bold uppercase tracking-wider opacity-90">Overall Risk</p>
+    <h1 class="text-5xl font-extrabold tracking-tight mt-2">${o.level}</h1>
+    <p class="mt-1 text-white/85 text-sm">Score ${o.score} / 10  ·  ${state.findings.length} findings detected</p>
+    <div class="mt-5 relative h-2 rounded-full bg-white/25 overflow-hidden">
+      <div class="absolute inset-0 flex">
+        <div class="flex-1" style="background:rgba(22,163,74,0.4);"></div>
+        <div class="flex-1" style="background:rgba(245,158,11,0.7);"></div>
+        <div class="flex-1" style="background:rgba(220,38,38,0.6);"></div>
+      </div>
+      <div class="absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-white border-2 border-white/70 shadow-lg" style="left:${pos}%;transform:translate(-50%,-50%);"></div>
+    </div>
+    <div class="flex justify-between text-[10px] font-extrabold mt-2 text-white/90"><span>LOW</span><span>MODERATE</span><span>HIGH</span></div>
+  `;
+
+  document.getElementById('findingCount').textContent = `${state.findings.length} detected`;
+  const list = document.getElementById('findingsList');
+  if (state.findings.length === 0) {
+    list.innerHTML = `<div class="rounded-2xl bg-success/10 border border-success/30 p-4 text-center"><span class="material-symbols-rounded text-success">verified</span><p class="font-bold mt-1">No findings detected</p><p class="text-xs text-ink-2">Your photos look healthy. Maintain your routine.</p></div>`;
+  } else {
+    // Group same-label findings
+    const map = new Map();
+    state.findings.forEach(f => {
+      const key = f.label;
+      if (!map.has(key)) map.set(key, { label: key, items: [], maxSev: 'low', maxConf: 0 });
+      const g = map.get(key);
+      g.items.push(f);
+      if (f.confidence > g.maxConf) g.maxConf = f.confidence;
+      const sevRank = { low: 0, moderate: 1, high: 2 };
+      if (sevRank[f.severity] > sevRank[g.maxSev]) g.maxSev = f.severity;
+    });
+    list.innerHTML = Array.from(map.values()).map(g => {
+      const sev = SEVERITY[g.maxSev];
+      const icon = g.maxSev === 'high' ? 'warning' : g.maxSev === 'moderate' ? 'error' : 'info';
+      return `
+        <div class="rounded-2xl bg-white border border-line shadow-soft p-4 flex items-start gap-3" onclick="go('findings')">
+          <div class="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0" style="background:${sev.bg};">
+            <span class="material-symbols-rounded" style="color:${sev.color};">${icon}</span>
+          </div>
+          <div class="flex-1">
+            <div class="flex items-center justify-between">
+              <p class="font-bold text-sm">${g.label}</p>
+              <span class="chip" style="background:${sev.bg};color:${sev.color};">${sev.label}</span>
+            </div>
+            <p class="text-xs text-ink-2 mt-1">Detected in ${g.items.length} image${g.items.length > 1 ? 's' : ''}</p>
+            <div class="mt-2 flex items-center gap-2">
+              <div class="flex-1 h-1.5 rounded-full bg-surface-3 overflow-hidden"><div class="h-full rounded-full" style="width:${Math.round(g.maxConf*100)}%;background:${sev.color};"></div></div>
+              <span class="text-[11px] font-extrabold" style="color:${sev.color};">${Math.round(g.maxConf*100)}%</span>
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  // Summary tiles
+  const sevByCategory = (labels) => {
+    const items = state.findings.filter(f => labels.some(l => f.label.toLowerCase().includes(l)));
+    if (!items.length) return { value: 'Good', color: '#16A34A' };
+    const has = (sev) => items.some(i => i.severity === sev);
+    if (has('high')) return { value: 'Care', color: '#DC2626' };
+    if (has('moderate')) return { value: 'Watch', color: '#F59E0B' };
+    return { value: 'Mild', color: '#0058BC' };
+  };
+  const teeth = sevByCategory(['carie', 'tooth', 'enamel', 'decay']);
+  const gums  = sevByCategory(['gingiva', 'gum', 'inflammat']);
+  const hyg   = sevByCategory(['plaque', 'tartar', 'hygien']);
+  document.getElementById('summaryTiles').innerHTML = `
+    ${tile('dentistry', 'TEETH', teeth)}
+    ${tile('spa', 'GUMS', gums)}
+    ${tile('water_drop', 'HYGIENE', hyg)}
+  `;
+
+  // Recommendations
+  if (state.recommendation) {
+    document.getElementById('urgencyTitle').textContent = state.recommendation.urgency || 'Schedule a dental check-up soon.';
+    document.getElementById('urgencyDesc').textContent  = 'Findings suggest a professional evaluation. This is not urgent.';
+    const adviceCard = document.getElementById('aiAdviceCard');
+    const adviceText = document.getElementById('aiAdviceText');
+    if (state.recommendation.advice) {
+      adviceText.textContent = state.recommendation.advice;
+      adviceCard.style.display = 'block';
+    } else {
+      adviceCard.style.display = 'none';
+    }
+  }
+}
+function tile(icon, label, v) {
+  return `<div class="rounded-2xl bg-white p-3">
+    <span class="material-symbols-rounded text-teal">${icon}</span>
+    <p class="text-[10px] text-ink-2 mt-1 font-bold">${label}</p>
+    <p class="font-extrabold text-sm" style="color:${v.color};">${v.value}</p>
+  </div>`;
+}
+
+// ----- Findings screen -----
+function renderFindings() {
+  const slotsWithPhotos = PHOTO_SLOTS.filter(s => state.photos[s.id]);
+  if (slotsWithPhotos.length === 0) return;
+  if (state.findingIndex >= slotsWithPhotos.length) state.findingIndex = 0;
+  const slot = slotsWithPhotos[state.findingIndex];
+  const photo = state.photos[slot.id];
+  const slotFindings = state.findings.filter(f => f.slotId === slot.id);
+
+  document.getElementById('findingsSubtitle').textContent = `Image ${state.findingIndex + 1} of ${slotsWithPhotos.length} · ${slot.title}`;
+
+  const imgWrap = document.getElementById('findingsImage');
+  imgWrap.innerHTML = '';
+  const img = document.createElement('img');
+  img.src = photo.dataUrl;
+  img.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;';
+  imgWrap.appendChild(img);
+
+  slotFindings.forEach(f => {
+    const sev = SEVERITY[f.severity];
+    const box = document.createElement('div');
+    box.style.cssText = `position:absolute;left:${f.box.x*100}%;top:${f.box.y*100}%;width:${f.box.w*100}%;height:${f.box.h*100}%;border:2px solid ${sev.color};border-radius:6px;box-shadow:0 0 0 4px ${sev.color}33;`;
+    const tag = document.createElement('span');
+    tag.textContent = `${f.label.split(' ').slice(0,2).join(' ')} · ${Math.round(f.confidence*100)}%`;
+    tag.style.cssText = `position:absolute;top:-22px;left:0;background:${sev.color};color:white;font-size:10px;font-weight:800;padding:2px 6px;border-radius:4px;white-space:nowrap;`;
+    box.appendChild(tag);
+    imgWrap.appendChild(box);
+  });
+
+  const dots = document.getElementById('findingsDots');
+  dots.innerHTML = slotsWithPhotos.map((_, i) => `<span class="w-${i === state.findingIndex ? '6' : '1.5'} h-1.5 rounded-full" style="background:${i === state.findingIndex ? '#0058BC' : '#CBD5E1'};display:inline-block;"></span>`).join('');
+
+  const detail = document.getElementById('findingsDetail');
+  if (slotFindings.length === 0) {
+    detail.innerHTML = `<div class="flex items-center gap-2"><span class="material-symbols-rounded text-success">check_circle</span><p class="font-bold">No findings detected in this image.</p></div>`;
+  } else {
+    const top = slotFindings.reduce((a, b) => a.confidence > b.confidence ? a : b);
+    const sev = SEVERITY[top.severity];
+    const others = slotFindings.filter(f => f.id !== top.id);
+    detail.innerHTML = `
+      <div class="flex gap-3">
+        <div class="w-11 h-11 rounded-xl flex items-center justify-center" style="background:${sev.bg};">
+          <span class="material-symbols-rounded icon-filled" style="color:${sev.color};">warning</span>
+        </div>
+        <div class="flex-1">
+          <div class="flex items-center justify-between">
+            <p class="font-bold">${top.label}</p>
+            <span class="chip" style="background:${sev.bg};color:${sev.color};">${Math.round(top.confidence*100)}% confidence</span>
+          </div>
+          <p class="text-xs text-ink-2 mt-1">Region in ${slot.title}</p>
+        </div>
+      </div>
+      <div class="mt-4 p-3 rounded-2xl bg-surface-2 border border-line">
+        <p class="text-sm text-ink-2 leading-relaxed">${top.description || `The AI has highlighted a region with possible <b>${top.label.toLowerCase()}</b>. This is an early visual indicator and may not be a confirmed condition. A dentist should validate clinically.`}</p>
+      </div>
+      ${others.length ? `
+        <div class="mt-4">
+          <p class="text-xs font-extrabold text-ink-2 uppercase tracking-wider">Other regions in this image</p>
+          <div class="flex flex-wrap gap-2 mt-2">
+            ${others.map(o => { const s = SEVERITY[o.severity]; return `<span class="chip" style="background:${s.bg};color:${s.color};">${o.label}</span>`; }).join('')}
+          </div>
+        </div>` : ''}
+    `;
+  }
+}
+
+function navFinding(d) {
+  const total = PHOTO_SLOTS.filter(s => state.photos[s.id]).length;
+  if (!total) return;
+  state.findingIndex = (state.findingIndex + d + total) % total;
+  renderFindings();
+}
+
+// ----- Research dashboard (live local tracking) -----
+const RESEARCH_KEY = 'dhaant.research';
+function loadResearch() {
+  try {
+    const raw = localStorage.getItem(RESEARCH_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return { patients: 0, images: 0, findings: 0, confSum: 0,
+           dist: { low: 0, moderate: 0, high: 0 },
+           weekly: [0,0,0,0,0,0,0],   // Sun..Sat
+           firstAt: null, lastAt: null };
+}
+function saveResearch(r) { localStorage.setItem(RESEARCH_KEY, JSON.stringify(r)); }
+
+function recordScreening({ overall, findings, imagesCount }) {
+  const r = loadResearch();
+  r.patients += 1;
+  r.images   += imagesCount;
+  r.findings += findings.length;
+  r.confSum  += findings.reduce((s, f) => s + (f.confidence || 0), 0);
+  const lvl = (overall.level || '').toLowerCase();
+  if (r.dist[lvl] != null) r.dist[lvl] += 1;
+  const now = Date.now();
+  r.weekly[new Date(now).getDay()] += 1;
+  r.firstAt = r.firstAt || now;
+  r.lastAt  = now;
+  r.lastOverall = overall.level;
+  saveResearch(r);
+}
+
+function relativeTime(ts) {
+  if (!ts) return 'Never';
+  const diff = Date.now() - ts;
+  const m = Math.floor(diff / 60000);
+  if (m < 1)    return 'Just now';
+  if (m < 60)   return m + ' min ago';
+  const h = Math.floor(m / 60);
+  if (h < 24)   return h + ' hr ago';
+  const d = Math.floor(h / 24);
+  if (d < 7)    return d === 1 ? 'Yesterday' : d + ' days ago';
+  if (d < 30)   return Math.floor(d / 7) + ' wk ago';
+  return new Date(ts).toLocaleDateString();
+}
+
+const STATUS_BY_LEVEL = {
+  Low:      { text: 'Healthy',   color: '#16A34A' },
+  Moderate: { text: 'Watch',     color: '#F59E0B' },
+  High:     { text: 'See dentist', color: '#DC2626' },
+};
+
+function resetResearch() {
+  if (!confirm('Reset all research dashboard data? This cannot be undone.')) return;
+  localStorage.removeItem(RESEARCH_KEY);
+  renderResearch();
+  toast('Research data reset');
+}
+
+function renderResearch() {
+  const r = loadResearch();
+  document.getElementById('rd-patients').textContent = r.patients.toLocaleString();
+  document.getElementById('rd-images').textContent   = r.images.toLocaleString();
+  document.getElementById('rd-findings').textContent = r.findings.toLocaleString();
+
+  document.getElementById('rd-patients-note').textContent =
+    r.patients === 0 ? 'No screenings yet' : (r.patients === 1 ? '1 session recorded' : `${r.patients} sessions recorded`);
+  document.getElementById('rd-images-note').textContent =
+    r.images === 0 ? 'Awaiting first analysis' : '5 per patient · avg';
+
+  const avgConf = r.findings ? (r.confSum / r.findings) : 0;
+  document.getElementById('rd-accuracy').textContent =
+    r.findings ? Math.round(avgConf * 100) + '%' : '—';
+  document.getElementById('rd-accuracy-note').textContent =
+    r.findings ? 'Across all findings' : 'Awaiting data';
+
+  const distTotal = r.dist.low + r.dist.moderate + r.dist.high;
+  const pct = (n) => distTotal ? Math.round(n / distTotal * 100) : 0;
+  const pLow = pct(r.dist.low), pMod = pct(r.dist.moderate), pHigh = pct(r.dist.high);
+  document.getElementById('rd-bar-low').style.width  = pLow + '%';
+  document.getElementById('rd-bar-mod').style.width  = pMod + '%';
+  document.getElementById('rd-bar-high').style.width = pHigh + '%';
+  document.getElementById('rd-pct-low').textContent  = pLow + '%';
+  document.getElementById('rd-pct-mod').textContent  = pMod + '%';
+  document.getElementById('rd-pct-high').textContent = pHigh + '%';
+  document.getElementById('rd-distribution-sub').textContent =
+    distTotal ? `Across ${distTotal} screening${distTotal>1?'s':''}` : 'No data yet';
+
+  // Weekly bars, anchored to today
+  const today = new Date().getDay();
+  const days = ['S','M','T','W','T','F','S'];
+  const order = []; for (let i = 6; i >= 0; i--) order.push((today - i + 7) % 7);
+  const max = Math.max(1, ...r.weekly);
+  document.getElementById('weeklyChart').innerHTML = order.map(idx => {
+    const v = r.weekly[idx];
+    const isToday = idx === today;
+    const h = v ? Math.max(8, Math.round(v / max * 100)) : 4;
+    return `
+      <div class="flex-1 flex flex-col items-center justify-end gap-1 h-full">
+        <div class="w-full rounded-t-md" style="height:${h}%;background:${isToday ? '#0058BC' : v ? '#0058BC' : '#EEF2F8'};opacity:${v ? 1 : 0.6};"></div>
+        <p class="text-[10px] font-extrabold" style="color:${isToday ? '#0058BC' : '#475569'};">${days[idx]}</p>
+      </div>`;
+  }).join('');
+  document.getElementById('rd-weekly-total').textContent =
+    r.patients === 0 ? '0 total' : `${r.patients} total`;
+
+  document.getElementById('rd-ds-total').textContent    = r.images.toLocaleString();
+  document.getElementById('rd-ds-findings').textContent = r.findings.toLocaleString();
+  const fmt = (t) => t ? new Date(t).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+  document.getElementById('rd-ds-first').textContent = fmt(r.firstAt);
+  document.getElementById('rd-ds-last').textContent  = fmt(r.lastAt);
+}
+renderResearch();
+
+function exportCSV() {
+  const rows = [['slotId','label','severity','confidence','box_x','box_y','box_w','box_h']];
+  state.findings.forEach(f => rows.push([f.slotId, f.label, f.severity, f.confidence, f.box.x, f.box.y, f.box.w, f.box.h]));
+  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'dhaant_findings.csv'; a.click();
+  URL.revokeObjectURL(url);
+  toast('CSV exported');
+}
+
+// ----- Initial render -----
+renderUploadCards();
+refreshHomeIdentity();
+
+</script>
+</body>
+</html>
