@@ -102,19 +102,59 @@ jobs:
       - name: Configure app icon + name
         working-directory: capacitor
         run: |
+          set -e
           RES=android/app/src/main/res
 
-          # Replace launcher icons with the DHANT icon (icons/icon-512.png is in www/).
-          for d in mipmap-mdpi mipmap-hdpi mipmap-xhdpi mipmap-xxhdpi mipmap-xxxhdpi; do
-            cp www/icons/icon-512.png $RES/$d/ic_launcher.png        2>/dev/null || true
-            cp www/icons/icon-512.png $RES/$d/ic_launcher_round.png  2>/dev/null || true
-            cp www/icons/icon-maskable-512.png $RES/$d/ic_launcher_foreground.png 2>/dev/null || true
+          # 1) Resize the source PNG into all density buckets using ImageMagick.
+          sudo apt-get install -y imagemagick > /dev/null
+
+          echo "--- Capacitor default icon files (before replacement) ---"
+          find $RES -name "ic_launcher*" | sort
+
+          # Density-specific sizes (Android conventions)
+          declare -A DENSITY_PX=( [mdpi]=48 [hdpi]=72 [xhdpi]=96 [xxhdpi]=144 [xxxhdpi]=192 )
+          declare -A FG_PX=( [mdpi]=108 [hdpi]=162 [xhdpi]=216 [xxhdpi]=324 [xxxhdpi]=432 )
+
+          for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+            DIR=$RES/mipmap-$d
+            mkdir -p $DIR
+
+            # Delete every existing launcher file (png + webp), prevents stale defaults.
+            rm -f $DIR/ic_launcher.* $DIR/ic_launcher_round.* $DIR/ic_launcher_foreground.*
+
+            SIZE=${DENSITY_PX[$d]}
+            FG=${FG_PX[$d]}
+
+            convert www/icons/icon-512.png -resize ${SIZE}x${SIZE}     $DIR/ic_launcher.png
+            convert www/icons/icon-512.png -resize ${SIZE}x${SIZE}     $DIR/ic_launcher_round.png
+            convert www/icons/icon-maskable-512.png -resize ${FG}x${FG} $DIR/ic_launcher_foreground.png
+
+            echo "  ✔ $d  $SIZE×$SIZE (launcher) + ${FG}×${FG} (foreground)"
           done
 
-          # Set background color of adaptive icon to brand blue.
-          if [ -f $RES/values/ic_launcher_background.xml ]; then
-            sed -i 's|#FFFFFF|#0058BC|' $RES/values/ic_launcher_background.xml || true
-          fi
+          # 2) Make the adaptive-icon XML point at our foreground + a solid background colour.
+          ADAPTIVE_DIR=$RES/mipmap-anydpi-v26
+          mkdir -p $ADAPTIVE_DIR
+          cat > $ADAPTIVE_DIR/ic_launcher.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@color/ic_launcher_background" />
+              <foreground android:drawable="@mipmap/ic_launcher_foreground" />
+          </adaptive-icon>
+          EOF
+          cp $ADAPTIVE_DIR/ic_launcher.xml $ADAPTIVE_DIR/ic_launcher_round.xml
+
+          # Background colour resource — brand blue.
+          mkdir -p $RES/values
+          cat > $RES/values/ic_launcher_background.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <color name="ic_launcher_background">#0058BC</color>
+          </resources>
+          EOF
+
+          echo "--- Final launcher files ---"
+          find $RES -name "ic_launcher*" -type f | sort
 
       - name: Sync Capacitor (copy assets into Android project)
         working-directory: capacitor
