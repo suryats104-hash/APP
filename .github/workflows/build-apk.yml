@@ -1,0 +1,143 @@
+name: Build DHANT Standalone APK
+
+# Triggers: every push to main, or manual run from the Actions tab.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Set up Java 17 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platforms;android-34 build-tools;34.0.0'
+
+      - name: Stage web assets into Capacitor project
+        run: |
+          mkdir -p capacitor/www
+
+          # Copy every web file at repo root into the Capacitor webDir.
+          # Excludes capacitor/, .github/, .git/ and other non-web folders.
+          rsync -a \
+            --exclude 'capacitor/' \
+            --exclude '.github/' \
+            --exclude '.git/' \
+            --exclude '_headers' \
+            --exclude '.nojekyll' \
+            --exclude 'README.md' \
+            --exclude '*.yml' \
+            ./ capacitor/www/
+
+          echo "--- www contents ---"
+          ls -la capacitor/www
+
+      - name: Initialize Capacitor project
+        working-directory: capacitor
+        run: |
+          # Minimal package.json — Capacitor 6.
+          cat > package.json << 'EOF'
+          {
+            "name": "dhant",
+            "version": "1.0.0",
+            "private": true,
+            "dependencies": {
+              "@capacitor/android": "^6.1.2",
+              "@capacitor/cli":     "^6.1.2",
+              "@capacitor/core":    "^6.1.2"
+            }
+          }
+          EOF
+
+          # Capacitor config — bundles www/ into the APK, app id, name, splash.
+          cat > capacitor.config.json << 'EOF'
+          {
+            "appId": "in.ac.jssaher.dhant",
+            "appName": "DHANT",
+            "webDir": "www",
+            "server": {
+              "androidScheme": "https",
+              "cleartext": false
+            },
+            "android": {
+              "allowMixedContent": false,
+              "captureInput": true,
+              "webContentsDebuggingEnabled": false,
+              "backgroundColor": "#FFFFFF"
+            }
+          }
+          EOF
+
+          npm install --no-audit --no-fund --silent
+          npx cap add android
+
+      - name: Inject CAMERA + INTERNET permissions
+        working-directory: capacitor
+        run: |
+          MANIFEST=android/app/src/main/AndroidManifest.xml
+          if ! grep -q "android.permission.CAMERA" "$MANIFEST"; then
+            sed -i 's|</manifest>|    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-permission android:name="android.permission.INTERNET" />\n    <uses-feature android:name="android.hardware.camera" android:required="false" />\n    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />\n</manifest>|' "$MANIFEST"
+          fi
+          echo "--- Final manifest ---"
+          cat "$MANIFEST"
+
+      - name: Configure app icon + name
+        working-directory: capacitor
+        run: |
+          RES=android/app/src/main/res
+
+          # Replace launcher icons with the DHANT icon (icons/icon-512.png is in www/).
+          for d in mipmap-mdpi mipmap-hdpi mipmap-xhdpi mipmap-xxhdpi mipmap-xxxhdpi; do
+            cp www/icons/icon-512.png $RES/$d/ic_launcher.png        2>/dev/null || true
+            cp www/icons/icon-512.png $RES/$d/ic_launcher_round.png  2>/dev/null || true
+            cp www/icons/icon-maskable-512.png $RES/$d/ic_launcher_foreground.png 2>/dev/null || true
+          done
+
+          # Set background color of adaptive icon to brand blue.
+          if [ -f $RES/values/ic_launcher_background.xml ]; then
+            sed -i 's|#FFFFFF|#0058BC|' $RES/values/ic_launcher_background.xml || true
+          fi
+
+      - name: Sync Capacitor (copy assets into Android project)
+        working-directory: capacitor
+        run: npx cap sync android
+
+      - name: Build debug APK (Gradle)
+        working-directory: capacitor/android
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Locate APK
+        id: locate
+        working-directory: capacitor
+        run: |
+          APK=$(find android/app/build/outputs/apk -name "*.apk" | head -1)
+          echo "Found: $APK"
+          echo "apk=$APK" >> $GITHUB_OUTPUT
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dhant-debug-apk
+          path: capacitor/android/app/build/outputs/apk/debug/*.apk
+          retention-days: 90
+          if-no-files-found: error
