@@ -90,23 +90,11 @@
   .modal-back { position: fixed; inset: 0; background: rgba(15,23,42,0.55); display: flex; align-items: center; justify-content: center; z-index: 9000; padding: 20px; }
   .modal-card { background: #fff; border-radius: 24px; width: 100%; max-width: 380px; padding: 24px; }
 
-  /* Status bar */
-  .status-bar { display: flex; align-items: center; justify-content: space-between; padding: 8px 18px; font-size: 12px; font-weight: 700; color: #0F172A; }
 </style>
 </head>
 
 <body>
 <div class="app-shell" id="shell">
-
-  <!-- Status bar -->
-  <div class="status-bar">
-    <span id="clock">9:41</span>
-    <div style="display:flex;gap:4px;align-items:center;">
-      <span class="material-symbols-rounded" style="font-size:14px;">signal_cellular_alt</span>
-      <span class="material-symbols-rounded" style="font-size:14px;">wifi</span>
-      <span class="material-symbols-rounded" style="font-size:14px;">battery_full</span>
-    </div>
-  </div>
 
   <!-- ====================================================== -->
   <!-- 1. SPLASH                                                -->
@@ -1258,15 +1246,6 @@ function toast(msg) {
   clearTimeout(t._h);
   t._h = setTimeout(() => t.style.display = 'none', 3500);
 }
-
-// ----- Clock -----
-function updateClock() {
-  const d = new Date();
-  document.getElementById('clock').textContent =
-    d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
-}
-setInterval(updateClock, 30000);
-updateClock();
 
 document.getElementById('dateLabel').textContent =
   new Date().toLocaleDateString(undefined, { weekday:'long', month:'long', day:'numeric' });
