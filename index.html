@@ -1193,6 +1193,8 @@ state._draftVisit    = '';
 
 function renderHistoryForm() {
   const h = state.history || {};
+  // Initialise once per page open. Subsequent symptom-chip taps DO NOT call this —
+  // they call renderSymptomChips() so the user's typing in other fields is preserved.
   document.getElementById('hx-complaint').value   = h.complaint   || '';
   document.getElementById('hx-pain').value        = h.pain ?? 0;
   document.getElementById('hx-pain-label').textContent = (h.pain ?? 0) + ' / 10';
@@ -1202,9 +1204,22 @@ function renderHistoryForm() {
   document.getElementById('hx-meds').value        = h.medications || '';
   document.getElementById('hx-allergies').value   = h.allergies   || '';
 
-  // Symptoms
+  // Symptoms — chips render via a separate function so toggling doesn't wipe the rest.
   state._draftSymptoms = new Set(h.symptoms || []);
+  renderSymptomChips();
+
+  // Initial draft values must be set BEFORE buildChoiceRow so the right button is highlighted.
+  state._draftBrushing = h.brushing  || '';
+  state._draftFlossing = h.flossing  || '';
+  state._draftVisit    = h.lastVisit || '';
+  buildChoiceRow('hx-brushing', BRUSH_LIST, state._draftBrushing, (v) => state._draftBrushing = v);
+  buildChoiceRow('hx-flossing', FLOSS_LIST, state._draftFlossing, (v) => state._draftFlossing = v);
+  buildChoiceRow('hx-visit',    VISIT_LIST, state._draftVisit,    (v) => state._draftVisit    = v);
+}
+
+function renderSymptomChips() {
   const sc = document.getElementById('hx-symptoms');
+  if (!sc) return;
   sc.innerHTML = SYMPTOM_LIST.map(s => {
     const on = state._draftSymptoms.has(s);
     return `<button type="button" class="h-10 rounded-xl border-2 text-xs font-bold flex items-center gap-1 px-3" data-sym="${s}"
@@ -1215,15 +1230,8 @@ function renderHistoryForm() {
   sc.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
     const v = b.dataset.sym;
     if (state._draftSymptoms.has(v)) state._draftSymptoms.delete(v); else state._draftSymptoms.add(v);
-    renderHistoryForm();
+    renderSymptomChips();
   }));
-
-  buildChoiceRow('hx-brushing', BRUSH_LIST, h.brushing,  (v) => state._draftBrushing = v);
-  buildChoiceRow('hx-flossing', FLOSS_LIST, h.flossing,  (v) => state._draftFlossing = v);
-  buildChoiceRow('hx-visit',    VISIT_LIST, h.lastVisit, (v) => state._draftVisit    = v);
-  state._draftBrushing = h.brushing  || '';
-  state._draftFlossing = h.flossing  || '';
-  state._draftVisit    = h.lastVisit || '';
 }
 
 function saveHistoryAndContinue() {
@@ -1526,8 +1534,21 @@ function onFile(ev, slotId) {
     const dataUrl = reader.result;
     const [meta, b64] = dataUrl.split(',');
     const mediaType = (meta.match(/data:(.*?);/) || [,'image/jpeg'])[1];
-    state.photos[slotId] = { dataUrl, mediaType, base64: b64 };
-    renderUploadCards();
+    // Probe natural dimensions so the Findings screen can position overlays accurately.
+    const probe = new Image();
+    probe.onload = () => {
+      state.photos[slotId] = {
+        dataUrl, mediaType, base64: b64,
+        width:  probe.naturalWidth,
+        height: probe.naturalHeight,
+      };
+      renderUploadCards();
+    };
+    probe.onerror = () => {
+      state.photos[slotId] = { dataUrl, mediaType, base64: b64, width: 0, height: 0 };
+      renderUploadCards();
+    };
+    probe.src = dataUrl;
   };
   reader.readAsDataURL(file);
 }
@@ -1638,7 +1659,7 @@ function capturePhoto() {
   const base64  = dataUrl.split(',')[1];
   const slot    = cameraSlot;
 
-  state.photos[slot] = { dataUrl, mediaType: 'image/jpeg', base64 };
+  state.photos[slot] = { dataUrl, mediaType: 'image/jpeg', base64, width: w, height: h };
   renderUploadCards();
 
   // Auto-advance to the next empty slot, or close after all 5.
@@ -2231,21 +2252,58 @@ function renderFindings() {
 
   const imgWrap = document.getElementById('findingsImage');
   imgWrap.innerHTML = '';
+  imgWrap.style.background = '#0F172A';
   const img = document.createElement('img');
   img.src = photo.dataUrl;
-  img.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;';
+  // 'contain' keeps the whole photo visible — letterbox bars instead of cropping.
+  img.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:contain;';
   imgWrap.appendChild(img);
 
-  slotFindings.forEach(f => {
-    const sev = SEVERITY[f.severity];
-    const box = document.createElement('div');
-    box.style.cssText = `position:absolute;left:${f.box.x*100}%;top:${f.box.y*100}%;width:${f.box.w*100}%;height:${f.box.h*100}%;border:2px solid ${sev.color};border-radius:6px;box-shadow:0 0 0 4px ${sev.color}33;`;
-    const tag = document.createElement('span');
-    tag.textContent = `${f.label.split(' ').slice(0,2).join(' ')} · ${Math.round(f.confidence*100)}%`;
-    tag.style.cssText = `position:absolute;top:-22px;left:0;background:${sev.color};color:white;font-size:10px;font-weight:800;padding:2px 6px;border-radius:4px;white-space:nowrap;`;
-    box.appendChild(tag);
-    imgWrap.appendChild(box);
-  });
+  // The container is square (aspect-square). Compute the contain-fit display rect
+  // inside it so we can overlay boxes that line up perfectly with the image content.
+  // `f.box.x / y / w / h` are normalized 0..1 over the SOURCE image.
+  const drawBoxes = () => {
+    const srcW = (photo.width  || img.naturalWidth)  || 1;
+    const srcH = (photo.height || img.naturalHeight) || 1;
+    const aspect = srcW / srcH;
+    let dispW, dispH, offX, offY;
+    if (aspect >= 1) {
+      // Landscape source → image fills the container width, letterbox top+bottom.
+      dispW = 1;
+      dispH = 1 / aspect;
+      offX  = 0;
+      offY  = (1 - dispH) / 2;
+    } else {
+      // Portrait source → image fills container height, letterbox left+right.
+      dispH = 1;
+      dispW = aspect;
+      offX  = (1 - dispW) / 2;
+      offY  = 0;
+    }
+
+    slotFindings.forEach((f) => {
+      const sev = SEVERITY[f.severity];
+      const left   = (offX + f.box.x * dispW) * 100;
+      const top    = (offY + f.box.y * dispH) * 100;
+      const width  = (f.box.w * dispW) * 100;
+      const height = (f.box.h * dispH) * 100;
+      const box = document.createElement('div');
+      box.style.cssText = `position:absolute;left:${left}%;top:${top}%;width:${width}%;height:${height}%;border:2px solid ${sev.color};border-radius:6px;box-shadow:0 0 0 4px ${sev.color}33;`;
+      const tag = document.createElement('span');
+      tag.textContent = `${f.label.split(' ').slice(0,2).join(' ')} · ${Math.round(f.confidence*100)}%`;
+      tag.style.cssText = `position:absolute;top:-22px;left:0;background:${sev.color};color:white;font-size:10px;font-weight:800;padding:2px 6px;border-radius:4px;white-space:nowrap;`;
+      box.appendChild(tag);
+      imgWrap.appendChild(box);
+    });
+  };
+
+  if (photo.width && photo.height) {
+    drawBoxes();
+  } else if (img.complete && img.naturalWidth) {
+    drawBoxes();
+  } else {
+    img.addEventListener('load', drawBoxes, { once: true });
+  }
 
   const dots = document.getElementById('findingsDots');
   dots.innerHTML = slotsWithPhotos.map((_, i) => `<span class="w-${i === state.findingIndex ? '6' : '1.5'} h-1.5 rounded-full" style="background:${i === state.findingIndex ? '#0058BC' : '#CBD5E1'};display:inline-block;"></span>`).join('');
