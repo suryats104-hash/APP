@@ -16,20 +16,31 @@
   let session = null;
   let loading = null;
 
-  // Configure ORT runtime — CPU WASM only, multi-threaded if available.
+  // Configure ORT runtime — CPU WASM only, single-threaded for WebView compatibility.
   NS.init = async function ({ modelUrl } = {}) {
     if (session) return session;
     if (loading) return loading;
 
     if (typeof ort === 'undefined') throw new Error('onnxruntime-web not loaded');
 
-    // WASM file paths (we ship them next to ort.min.js)
-    ort.env.wasm.wasmPaths = 'vendor/onnx/';
-    ort.env.wasm.numThreads = Math.min(navigator.hardwareConcurrency || 2, 4);
-    ort.env.wasm.simd = true;
+    // Resolve WASM paths to an absolute URL.
+    // Bare specifiers like 'vendor/onnx/foo.mjs' fail dynamic import in WebView —
+    // they have to start with './', '/', '../', or be a fully-qualified URL.
+    // new URL(..., document.baseURI) always yields a valid absolute https://... URL.
+    const wasmBase = new URL('vendor/onnx/', document.baseURI).href;
+    ort.env.wasm.wasmPaths = wasmBase;
+
+    // SharedArrayBuffer requires COOP/COEP headers which Capacitor's WebView
+    // doesn't set, so force single-thread to avoid the failed worker spawn.
+    ort.env.wasm.numThreads = 1;
+    ort.env.wasm.simd       = true;
+    ort.env.wasm.proxy      = false;
+
+    // Resolve the model URL the same way so the WebView can fetch it.
+    const resolvedModelUrl = new URL(modelUrl || 'models/dhant-caries.onnx', document.baseURI).href;
 
     loading = ort.InferenceSession.create(
-      modelUrl || 'models/dhant-caries.onnx',
+      resolvedModelUrl,
       {
         executionProviders: ['wasm'],
         graphOptimizationLevel: 'all',
