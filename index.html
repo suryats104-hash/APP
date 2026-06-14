@@ -25,6 +25,9 @@
 <script src="vendor/tailwind.js"></script>
 <link href="vendor/fonts/google-fonts.css" rel="stylesheet" />
 <link href="vendor/fonts/material-symbols.css" rel="stylesheet" />
+<!-- onnxruntime-web + DHANT YOLO inference (loaded lazily on first analysis) -->
+<script src="vendor/onnx/ort.min.js" defer></script>
+<script src="vendor/onnx/yolo-inference.js" defer></script>
 <script>
   tailwind.config = {
     theme: {
@@ -269,7 +272,7 @@
               </div>
               <div class="flex gap-4 items-start">
                 <div class="z-10 w-9 h-9 rounded-full bg-teal-bg border-2 border-teal flex items-center justify-center ring-4 ring-white"><span class="material-symbols-rounded text-teal" style="font-size:18px;">auto_awesome</span></div>
-                <div><p class="font-semibold text-sm">STEP 2 · AI Analysis</p><p class="text-ink-2 text-sm">Claude vision model scans for findings.</p></div>
+                <div><p class="font-semibold text-sm">STEP 2 · AI Analysis</p><p class="text-ink-2 text-sm">DHANT YOLOv8 model runs on-device for caries detection.</p></div>
               </div>
               <div class="flex gap-4 items-start">
                 <div class="z-10 w-9 h-9 rounded-full bg-surface-3 flex items-center justify-center ring-4 ring-white"><span class="material-symbols-rounded text-ink-3" style="font-size:18px;">assignment_turned_in</span></div>
@@ -569,7 +572,7 @@
         </div>
 
         <h1 class="text-2xl font-extrabold mt-10" id="analysisTitle">Analyzing your images</h1>
-        <p class="text-ink-2 text-sm mt-2" id="analysisSubtitle">Sending photos to Claude vision model…</p>
+        <p class="text-ink-2 text-sm mt-2" id="analysisSubtitle">Running DHANT YOLOv8 model on-device…</p>
 
         <div class="w-full mt-8">
           <div class="flex justify-between text-xs font-bold text-ink-2 mb-2">
@@ -854,11 +857,18 @@
 
     <div class="mt-4">
       <label class="text-xs font-bold text-ink-2 uppercase tracking-wider">Provider</label>
-      <div class="mt-2 grid grid-cols-3 gap-2">
-        <button class="provider-btn h-10 rounded-xl border-2 text-xs font-bold" data-provider="anthropic">Claude</button>
-        <button class="provider-btn h-10 rounded-xl border-2 text-xs font-bold" data-provider="openai">GPT-4o</button>
-        <button class="provider-btn h-10 rounded-xl border-2 text-xs font-bold" data-provider="groq">Groq</button>
+      <div class="mt-2 grid grid-cols-2 gap-2">
+        <button class="provider-btn h-12 rounded-xl border-2 text-xs font-bold" data-provider="yolo">
+          <span class="material-symbols-rounded" style="font-size:14px;vertical-align:-2px;">memory</span>
+          On-device YOLO
+        </button>
+        <button class="provider-btn h-12 rounded-xl border-2 text-xs font-bold" data-provider="anthropic">Claude</button>
+        <button class="provider-btn h-12 rounded-xl border-2 text-xs font-bold" data-provider="openai">GPT-4o</button>
+        <button class="provider-btn h-12 rounded-xl border-2 text-xs font-bold" data-provider="groq">Groq</button>
       </div>
+      <p id="yoloHint" class="mt-2 text-[11px] text-ink-2 leading-relaxed" style="display:none;">
+        Runs the trained YOLOv8n caries-detection model on-device. No internet or API key required.
+      </p>
     </div>
 
     <div class="mt-4">
@@ -908,12 +918,14 @@ const DEFAULT_MODELS = {
   anthropic: 'claude-sonnet-4-5',
   openai:    'gpt-4o',
   groq:      'meta-llama/llama-4-scout-17b-16e-instruct',
+  yolo:      'DHANT YOLOv8n (caries)',
 };
 
 const PROVIDER_LABEL = {
   anthropic: 'Claude',
   openai:    'GPT-4o',
   groq:      'Groq',
+  yolo:      'On-device YOLO',
 };
 
 // ----- State -----
@@ -1669,8 +1681,15 @@ function updateUploadProgress() {
     btn.className = 'w-full h-14 rounded-2xl bg-primary text-white font-bold text-base shadow-float flex items-center justify-center gap-2';
     btn.onclick = () => go('analysis');
     btn.querySelector('.material-symbols-rounded').textContent = 'auto_awesome';
-    lbl.textContent = state.apiKey ? `Analyze with ${PROVIDER_LABEL[state.provider]}` : 'Analyze (Demo mode)';
-    note.textContent = state.apiKey ? `Photos will be sent to ${PROVIDER_LABEL[state.provider]} for analysis.` : 'No API key — results will be simulated.';
+    // YOLO is the default — only use a cloud provider if user picked one *and* has a key.
+    const usingCloud = state.provider !== 'yolo' && !!state.apiKey;
+    if (usingCloud) {
+      lbl.textContent  = `Analyze with ${PROVIDER_LABEL[state.provider]}`;
+      note.textContent = `Photos will be sent to ${PROVIDER_LABEL[state.provider]} for analysis.`;
+    } else {
+      lbl.textContent  = 'Analyze on-device';
+      note.textContent = 'Caries detection runs locally with the DHANT YOLOv8 model — no internet needed.';
+    }
   } else {
     btn.disabled = true;
     btn.className = 'w-full h-14 rounded-2xl bg-surface-3 text-ink-3 font-bold text-base flex items-center justify-center gap-2 cursor-not-allowed';
@@ -1700,6 +1719,13 @@ function setProvider(p) {
   });
   document.getElementById('modelHint').textContent = DEFAULT_MODELS[p];
   if (!state.model) document.getElementById('modelInput').value = DEFAULT_MODELS[p];
+
+  // YOLO doesn't need an API key — hide the key input + show explanation.
+  const isYolo  = p === 'yolo';
+  const keyInp  = document.getElementById('apiKeyInput');
+  const keyHint = document.getElementById('yoloHint');
+  if (keyInp)  keyInp.parentElement.parentElement.style.display = isYolo ? 'none' : '';
+  if (keyHint) keyHint.style.display = isYolo ? 'block' : 'none';
 }
 
 document.querySelectorAll('.provider-btn').forEach(b => b.addEventListener('click', () => setProvider(b.dataset.provider)));
@@ -1728,17 +1754,19 @@ function clearApiKey() {
 }
 function updateApiKeyLabel() {
   const lbl = document.getElementById('apiKeyLabel');
-  if (state.apiKey) {
+  if (state.provider === 'yolo') {
+    lbl.textContent = 'On-device YOLO · no key needed';
+  } else if (state.apiKey) {
     const tail = state.apiKey.slice(-4);
     lbl.textContent = `API key set · …${tail}`;
   } else {
-    lbl.textContent = 'Configure API Key (optional)';
+    lbl.textContent = 'Configure AI provider';
   }
 }
 
 (function loadStoredKey() {
   state.apiKey   = localStorage.getItem('dhaant.apiKey')   || '';
-  state.provider = localStorage.getItem('dhaant.provider') || 'anthropic';
+  state.provider = localStorage.getItem('dhaant.provider') || 'yolo';   // default to on-device
   state.model    = localStorage.getItem('dhaant.model')    || '';
   updateApiKeyLabel();
 })();
@@ -1789,15 +1817,18 @@ async function startAnalysis() {
 
   setProgress(25, 0, 'Photographs encoded.');
   await sleep(400);
-  setProgress(35, 1, state.apiKey
-    ? `Sending to ${PROVIDER_LABEL[state.provider]}…`
-    : 'Running in demo mode (no API key)…');
+  // YOLO is the default. Cloud providers are only used when the user explicitly picks one + has a key.
+  const usingCloud = (state.provider !== 'yolo') && !!state.apiKey;
+  setProgress(35, 1,
+    usingCloud ? `Sending to ${PROVIDER_LABEL[state.provider]}…`
+               : 'Running DHANT YOLOv8 model on-device…');
 
   let result;
   try {
-    result = state.apiKey ? await callAI() : await simulateAI();
+    if (usingCloud) result = await callAI();
+    else            result = await callYolo();
   } catch (err) {
-    toast('AI call failed: ' + (err.message || 'unknown error') + ' — using simulated results.');
+    toast('Analysis failed: ' + (err.message || 'unknown error') + ' — fallback to demo data.');
     result = await simulateAI();
   }
   if (state.analysisAbort) return;
@@ -1844,10 +1875,17 @@ function packageResult(findings, urgency, advice) {
 }
 
 function computeOverall(findings) {
-  if (!findings.length) return { level: 'Low', score: 1.0 };
-  const w = { low: 1, moderate: 2.4, high: 4 };
-  const total = findings.reduce((s, f) => s + (w[f.severity] || 1) * (f.confidence || 1), 0);
-  const score = Math.min(10, +(total * 1.4).toFixed(1));
+  // Caries-focused risk flagging (YOLOv8 detects only caries lesions).
+  // Severity scoring weights small (class 'd') vs severe (class 'D') lesions.
+  if (!findings.length) return { level: 'Low', score: 0.5 };
+  const w = { low: 1.0, moderate: 2.5, high: 4.5 };
+  const total = findings.reduce((s, f) => s + (w[f.severity] || 1) * (f.confidence || 0.5), 0);
+
+  // Promote risk if multiple lesions detected across photos.
+  const highCount = findings.filter(f => f.severity === 'high').length;
+  const totalCount = findings.length;
+  let score = Math.min(10, +(total * 1.4 + Math.max(0, totalCount - 1) * 0.6).toFixed(1));
+  if (highCount >= 2) score = Math.min(10, score + 1.5);
   const level = score >= 7 ? 'High' : score >= 4 ? 'Moderate' : 'Low';
   return { level, score };
 }
@@ -1872,6 +1910,48 @@ Schema:
   "urgency": "Short sentence on recommended next step (visit timing).",
   "advice": "1-2 sentences of personalized oral hygiene advice based on findings."
 }`;
+
+// ----- On-device YOLOv8 inference -----
+async function callYolo() {
+  if (!window.DhantYolo) throw new Error('YOLO runtime not loaded');
+  await window.DhantYolo.init({ modelUrl: 'models/dhant-caries.onnx' });
+
+  const findings = [];
+  let fid = 0;
+  for (const slot of PHOTO_SLOTS) {
+    const photo = state.photos[slot.id];
+    if (!photo) continue;
+    const img = await window.DhantYolo.loadImage(photo.dataUrl);
+    const dets = await window.DhantYolo.detect(img);
+    for (const d of dets) {
+      // Map class → severity. Class 1 (uppercase 'D') = severe.
+      const severity = d.classId === 1 ? 'high' : (d.score > 0.6 ? 'moderate' : 'low');
+      findings.push({
+        id: 'y' + (fid++),
+        slotId: slot.id,
+        label: d.classId === 1 ? 'Severe caries lesion' : 'Possible caries',
+        severity,
+        confidence: +d.score.toFixed(2),
+        box: d.box,
+        description: `YOLOv8n detected ${d.label} (${Math.round(d.score*100)}%) on the ${slot.title.toLowerCase()}.`,
+      });
+    }
+  }
+
+  const hasHigh   = findings.some(f => f.severity === 'high');
+  const hasMod    = findings.some(f => f.severity === 'moderate');
+  const urgency =
+    hasHigh ? 'See a dentist within 1–2 weeks. Severe lesions were detected.' :
+    hasMod  ? 'Schedule a dental check-up within 2–4 weeks for confirmation.' :
+    findings.length ? 'Routine dental visit within 1–3 months recommended.' :
+                      'No caries detected — keep up your routine.';
+  const advice =
+    findings.length
+      ? 'Brush gently around the flagged regions twice daily with a fluoride toothpaste, and floss before bed.'
+      : 'Maintain twice-daily brushing and daily flossing.';
+
+  return packageResult(findings, urgency, advice);
+}
 
 async function callAI() {
   if (state.provider === 'anthropic') return callAnthropic();
@@ -2038,11 +2118,16 @@ function renderResults() {
                              ['#16A34A', '#15803D'];
   const pos = Math.min(96, Math.max(2, (o.score / 10) * 100));
   hero.style.background = `linear-gradient(135deg, ${grad[0]} 0%, ${grad[1]} 100%)`;
+  const usedYolo = state.provider === 'yolo' || (state.findings[0] && /^y/.test(state.findings[0].id || ''));
+  const sourceBadge = usedYolo
+    ? '<span class="absolute top-4 right-4 chip bg-white/20 text-white text-[10px]"><span class="material-symbols-rounded" style="font-size:12px;">memory</span> On-device YOLO</span>'
+    : '';
   hero.innerHTML = `
     <div class="absolute -top-6 -right-6 w-32 h-32 rounded-full bg-white/15 blur-2xl"></div>
-    <p class="text-sm font-bold uppercase tracking-wider opacity-90">Overall Risk</p>
+    ${sourceBadge}
+    <p class="text-sm font-bold uppercase tracking-wider opacity-90">Caries Risk</p>
     <h1 class="text-5xl font-extrabold tracking-tight mt-2">${o.level}</h1>
-    <p class="mt-1 text-white/85 text-sm">Score ${o.score} / 10  ·  ${state.findings.length} findings detected</p>
+    <p class="mt-1 text-white/85 text-sm">Score ${o.score} / 10  ·  ${state.findings.length} lesion${state.findings.length === 1 ? '' : 's'} detected</p>
     <div class="mt-5 relative h-2 rounded-full bg-white/25 overflow-hidden">
       <div class="absolute inset-0 flex">
         <div class="flex-1" style="background:rgba(22,163,74,0.4);"></div>
